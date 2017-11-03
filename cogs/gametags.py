@@ -134,6 +134,8 @@ class Gametags:
                 table.reversesort = True
 
                 await ctx.send(f"Players for {selected_tags[0].name}: ```{table.get_string()}```")
+            else:
+                await ctx.send("ded game")
 
         if unknown_tag_names:
             await ctx.send(f"```Unknown tags: {', '.join(unknown_tag_names)}\nTry: !help list```")
