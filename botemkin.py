@@ -10,8 +10,7 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 KOZLEMENYEK='kozlemenyek'
-BOTEMKIN_PLS='botemkin_dev'
-#BOTEMKIN_PLS='botemkin_pls'
+BOTEMKIN_PLS='botemkin_pls'
 
 COMMAND_PREFIX = '!'
 DESCRIPTION = """
@@ -23,7 +22,6 @@ Gametags are case-insensitive and cannot contain whitespaces.
 INITIAL_EXTENSIONS = (
     'cogs.gametags',
     'cogs.fun',
-    #'cogs.combo,'
 )
 
 class Botemkin(commands.Bot):
