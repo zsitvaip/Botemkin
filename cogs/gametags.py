@@ -137,14 +137,14 @@ class Gametags:
                     SELECT game_tags.tag_id, games.id, games.name
                     FROM games
                     LEFT OUTER JOIN game_tags ON games.id = game_tags.game_id
-                    ORDER BY games.id ASC
+                    ORDER BY games.name ASC
                 """)
             else:
                 cursor.execute(f"""
                     SELECT game_tags.tag_id, games.id, games.name
                     FROM games
                     INNER JOIN game_tags ON games.id = game_tags.game_id
-                    WHERE game_tags.tag_id IN (?{(len(tags) - 1) * ', ?'})
+                    WHERE games.name IN (?{(len(tags) - 1) * ', ?'})
                     ORDER BY game_tags.tag_id ASC
                 """, [tag.id for tag in tags])
             rows = cursor.fetchall()
@@ -170,7 +170,7 @@ class Gametags:
                     SELECT platform_tags.tag_id, platforms.id, platforms.name
                     FROM platforms
                     LEFT OUTER JOIN platform_tags ON platforms.id = platform_tags.platform_id
-                    ORDER BY platforms.id ASC
+                    ORDER BY platforms.name ASC
                 """)
             else:
                 cursor.execute(f"""
@@ -178,7 +178,7 @@ class Gametags:
                     FROM platforms
                     INNER JOIN platform_tags ON platforms.id = platform_tags.platform_id
                     WHERE platform_tags.tag_id IN (?{(len(tags) - 1) * ', ?'})
-                    ORDER BY platform_tags.tag_id ASC
+                    ORDER BY platforms.name ASC
                 """, [tag.id for tag in tags])
             rows = cursor.fetchall()
         finally:
@@ -634,7 +634,7 @@ class Gametags:
         else:
             await ctx.send(f"```There are currently no imported platforms.```")
 
-    @platform.command(name='buy', aliases=['on'], usage='<platformtags>')
+    @platform.command(name='own', aliases=['buy', 'play', 'on'], usage='<platformtags>')
     async def platform_on(self, ctx, *tag_names):
         """Assigns you the listed platformtags."""
         
