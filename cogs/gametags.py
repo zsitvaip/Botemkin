@@ -89,7 +89,7 @@ class Gametags:
 
         return available_tags
 
-    def get_selected_tags(self, guild : discord.Guild, requested_tag_names : list):
+    def get_selected_tags(self, guild : discord.Guild, requested_tag_names: list):
         # TODO use sets and the intersection/difference functions
         available_tags = self.get_available_tags(guild)
 
@@ -144,12 +144,15 @@ class Gametags:
                     SELECT game_tags.tag_id, games.id, games.name
                     FROM games
                     INNER JOIN game_tags ON games.id = game_tags.game_id
-                    WHERE games.name IN (?{(len(tags) - 1) * ', ?'})
-                    ORDER BY game_tags.tag_id ASC
+                    WHERE game_tags.tag_id IN (?{(len(tags) - 1) * ', ?'})
+                    ORDER BY games.name ASC
                 """, [tag.id for tag in tags])
             rows = cursor.fetchall()
         finally:
             conn.close()
+
+        for row in rows:
+            print(row)
 
         gametags = []
         if rows:
@@ -406,37 +409,45 @@ class Gametags:
 
         await ctx.send(msg_str)
 
-    # TODO use API error handling for bad parameters; take a look at get_selected_tags() function
     @game.command(name='players', aliases=['p'], usage='<gametag>')
-    async def game_players(self, ctx, tag_name):
+    async def game_players(self, ctx, role: commands.RoleConverter):
         """Lists players (and their status) with given gametag."""
 
-        selected_tags, unknown_tag_names = self.get_selected_tags(ctx.guild, [tag_name])
+        game = None
+        try:
+            conn = sqlite3.connect(self.db_path, isolation_level=None)
+            cursor = conn.cursor()
 
-        if selected_tags:
+            cursor.execute(f"""
+                SELECT games.name
+                FROM games
+                INNER JOIN game_tags ON games.id = game_tags.game_id
+                WHERE game_tags.tag_id = ?
+            """, [role.id])
 
+            game = cursor.fetchone()
+        finally:
+            conn.close()
+
+        if game:
             msg_str = ""
-            if tagged_members:
-
-                for m in tagged_members:
-                    if m.status == discord.Status.offline:
-                        msg_str += f"{m.name} #{m.status}\n"
-                    else:
-                        msg_str += f"{m.name} [{m.status}]\n"
-                # TODO replace {selected_tags[0].name} with {game_name} when DB is done probably
-                await ctx.send(f"Players for {selected_tags[0].name}:```css\n{msg_str}```")
+            for player in role.members:
+                if player.status == discord.Status.offline:
+                    msg_str += f"{player.name} #{player.status}\n"
+                else:
+                    msg_str += f"{player.name} [{player.status}]\n"
+            if msg_str:
+                await ctx.send(f"Players for {game[0]}:```css\n{msg_str}```")
             else:
                 await ctx.send("ded game")
 
-        if unknown_tag_names:
-            await ctx.send(f"```Unknown tags: {', '.join(unknown_tag_names)}\nTry: !game list```")
-
-    @game.group(name='add', aliases=['a'])
+    @game.group(name='add', aliases=['a'], invoke_without_command=True)
     @commands.check(is_admin)
     async def game_add(self, ctx): 
         """Add or update the following game attribute. (Admin only)"""
 
-        #TODO fix so that it shows even if no subcommand is given (now it only shows on wrong subcommand)
+        # TODO fix so that it shows even if no subcommand is given (now it only shows on wrong subcommand)
+        # invoke_without_command=True seems to have fixed this but not sure why, investigate
         if ctx.invoked_subcommand is None:
             await ctx.send("```Try: !help game add```")
 
@@ -714,27 +725,36 @@ class Gametags:
         await ctx.send(msg_str)
 
     @platform.command(name='players', aliases=['p'], usage='<platformtag>')
-    async def platform_players(self, ctx, tag_name):
+    async def platform_players(self, ctx, role: commands.RoleConverter):
         """Lists players (and their status) with given platformtag."""
 
-        selected_tags, unknown_tag_names = self.get_selected_tags(ctx.guild, [tag_name])
+        platform = None
+        try:
+            conn = sqlite3.connect(self.db_path, isolation_level=None)
+            cursor = conn.cursor()
 
-        if selected_tags:
+            cursor.execute(f"""
+                SELECT platforms.name
+                FROM platforms
+                INNER JOIN platform_tags ON platforms.id = platform_tags.platform_id
+                WHERE platform_tags.tag_id = ?
+            """, [role.id])
 
+            platform = cursor.fetchone()
+        finally:
+            conn.close()
+
+        if platform:
             msg_str = ""
-            if tagged_members:
-
-                for m in tagged_members:
-                    if m.status == discord.Status.offline:
-                        msg_str += f"{m.name} #{m.status}\n"
-                    else:
-                        msg_str += f"{m.name} [{m.status}]\n"
-                await ctx.send(f"Players for {selected_tags[0].name}:```css\n{msg_str}```")
+            for player in role.members:
+                if player.status == discord.Status.offline:
+                    msg_str += f"{player.name} #{player.status}\n"
+                else:
+                    msg_str += f"{player.name} [{player.status}]\n"
+            if msg_str:
+                await ctx.send(f"Players on {platform[0]}:```css\n{msg_str}```")
             else:
                 await ctx.send("ded platform")
-
-        if unknown_tag_names:
-            await ctx.send(f"```Unknown tags: {', '.join(unknown_tag_names)}\nTry: !platform list```")
 
     @platform.group(name='add', aliases=['a'])
     @commands.check(is_admin)
@@ -948,7 +968,17 @@ class Gametags:
 
         await ctx.send(msg_str)
 
+    @commands.command()
+    async def test(self, ctx, *roles: commands.RoleConverter):
+        #roleConverter = commands.RoleConverter()
+        #role = await commands.RoleConverter.convert(ctx, role_name)
+        #role = await roleConverter.convert(ctx, role_name)
+        #print(role_name)
+        for role in roles:
+            await ctx.send(role.name)
+
     # TODO make it actually useful now that it works at all
+    @test.error
     @tag_on.error
     @tag_off.error
     @tag_create.error
