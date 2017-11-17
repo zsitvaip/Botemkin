@@ -15,8 +15,7 @@ BOTEMKIN_PLS='botemkin_pls'
 COMMAND_PREFIX = '!'
 DESCRIPTION = """
 Pot but bot.
-Mainly for handing out self-assignable roles (aka gametags).
-Gametags are case-insensitive and cannot contain whitespaces.
+Mainly for handing out self-assignable roles (aka tags).
 """
 
 INITIAL_EXTENSIONS = (

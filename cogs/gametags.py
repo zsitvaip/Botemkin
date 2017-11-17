@@ -433,9 +433,9 @@ class Gametags:
             msg_str = ""
             for player in role.members:
                 if player.status == discord.Status.offline:
-                    msg_str += f"{player.name} #{player.status}\n"
+                    msg_str += f"{player.display_name} #{player.status}\n"
                 else:
-                    msg_str += f"{player.name} [{player.status}]\n"
+                    msg_str += f"{player.display_name} [{player.status}]\n"
             if msg_str:
                 await ctx.send(f"Players for {game[0]}:```css\n{msg_str}```")
             else:
@@ -748,9 +748,9 @@ class Gametags:
             msg_str = ""
             for player in role.members:
                 if player.status == discord.Status.offline:
-                    msg_str += f"{player.name} #{player.status}\n"
+                    msg_str += f"{player.display_name} #{player.status}\n"
                 else:
-                    msg_str += f"{player.name} [{player.status}]\n"
+                    msg_str += f"{player.display_name} [{player.status}]\n"
             if msg_str:
                 await ctx.send(f"Players on {platform[0]}:```css\n{msg_str}```")
             else:
@@ -967,15 +967,6 @@ class Gametags:
             msg_str += f"```Unknown generic tags: {', '.join(unknown_tag_names)}\nTry: !tag list```"
 
         await ctx.send(msg_str)
-
-    @commands.command()
-    async def test(self, ctx, *roles: commands.RoleConverter):
-        #roleConverter = commands.RoleConverter()
-        #role = await commands.RoleConverter.convert(ctx, role_name)
-        #role = await roleConverter.convert(ctx, role_name)
-        #print(role_name)
-        for role in roles:
-            await ctx.send(role.name)
 
     # TODO make it actually useful now that it works at all
     @test.error
