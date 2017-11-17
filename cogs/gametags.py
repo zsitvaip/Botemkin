@@ -969,7 +969,6 @@ class Gametags:
         await ctx.send(msg_str)
 
     # TODO make it actually useful now that it works at all
-    @test.error
     @tag_on.error
     @tag_off.error
     @tag_create.error
