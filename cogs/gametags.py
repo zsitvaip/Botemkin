@@ -14,7 +14,7 @@ class Gametags:
 
     def __init__(self, bot):
         self.bot = bot
-        
+
         self.gametag_dict = {}
         self.data_dir = 'data/'
         self.db_path = f'{self.data_dir}gametag.db'
@@ -28,7 +28,7 @@ class Gametags:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
             conn.execute('PRAGMA journal_mode = wal')
             conn.execute('PRAGMA foreign_keys = ON')
-            
+
             conn.execute('BEGIN')
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS tags (
@@ -83,9 +83,11 @@ class Gametags:
             conn.close()
 
     def get_available_tags(self, guild : discord.Guild):
-        everyone_role = guild.roles[0]
+        everyone_role = discord.utils.find(
+            lambda role: role.id == guild.id, guild.roles)
+
         available_tags = list(filter(
-            lambda role: role.permissions <= everyone_role.permissions, guild.roles[1:]))
+            lambda role: role.id != everyone_role.id and role.permissions <= everyone_role.permissions, guild.roles))
 
         return available_tags
 
@@ -96,10 +98,10 @@ class Gametags:
         selected_tags = []
         unknown_tag_names = []
         for tag_name in requested_tag_names:
-            
+
             requested_tag = discord.utils.find(
                 lambda tag: tag.name.casefold() == tag_name.casefold(), available_tags)
-            
+
             if requested_tag:
                 selected_tags.append(requested_tag)
             else:
@@ -123,7 +125,7 @@ class Gametags:
             game_rows = cursor.fetchall()
         finally:
             conn.close()
-        
+
         return game_rows
 
     def get_gametags_from_db(self, tags, *, all = False):
@@ -258,16 +260,16 @@ class Gametags:
             result = self.igdb.games({
                 'ids': game_id
             })
-            
+
             games = result.body
             if games:
                 game = games[0]
-                
+
                 try:
                     conn = sqlite3.connect(self.db_path, isolation_level=None)
                     conn.execute('PRAGMA foreign_keys = ON')
                     cursor = conn.cursor()
-                    
+
                     cursor.execute("SELECT 1 FROM games WHERE id = ?", [game['id']])
                     if cursor.fetchone() is None:
                         conn.execute("INSERT INTO games (id, name) VALUES (?, ?)", [game['id'], game['name']])
@@ -288,16 +290,16 @@ class Gametags:
     @game.group(name='list', aliases=['ls', 'l'], usage='[all|a]')
     async def game_list(self, ctx):
         """Lists all available gametags."""
-        
+
         if ctx.invoked_subcommand.qualified_name != 'game list':
             return
 
         available_tags = self.get_available_tags(ctx.guild)
 
         if available_tags:
-            
+
             gametags = self.get_gametags_from_db(available_tags)
-            
+
             if gametags:
                 msg_str = ""
                 for gametag in gametags:
@@ -333,17 +335,17 @@ class Gametags:
     @game.command(name='play', aliases=['on'], usage='<gametags>')
     async def game_on(self, ctx, *tag_names):
         """Assigns you the listed gametags."""
-        
+
         selected_tags, unknown_tag_names = self.get_selected_tags(ctx.guild, tag_names)
 
         msg_str = ""
         if selected_tags:
 
             gametags = self.get_gametags_from_db(selected_tags)
-            
+
             tags = []
             if gametags:
-                
+
                 game_names = []
                 for gametag in gametags:
                     tags.append(gametag['tag'])
@@ -353,12 +355,12 @@ class Gametags:
                 await ctx.author.add_roles(*tags, reason=f"{ctx.author} requested gametags")
 
                 msg_str += f"{ctx.author.display_name} now plays "
-                
+
                 if len(game_names) > 1:
                     msg_str += f"{', '.join(game_names[0:-1])} and {game_names[-1]}! "
                 else:
                     msg_str += f"{game_names[0]}! "
-                
+
                 e = discord.utils.get(ctx.guild.emojis, name='quan')
                 if e:
                     msg_str += len(game_names) * f"<:{e.name}:{e.id}>"
@@ -380,7 +382,7 @@ class Gametags:
         if selected_tags:
 
             gametags = self.get_gametags_from_db(selected_tags)
-            
+
             tags = []
             if gametags:
 
@@ -392,12 +394,12 @@ class Gametags:
                 await ctx.author.remove_roles(*tags, reason=f"{ctx.author} relinquished gametags")
 
                 msg_str += f"{ctx.author.display_name} just dropped "
-                
+
                 if len(game_names) > 1:
                     msg_str += f"{', '.join(game_names[0:-1])} and {game_names[-1]}! "
                 else:
                     msg_str += f"{game_names[0]}! "
-                
+
                 e = discord.utils.get(ctx.guild.emojis, name='salt')
                 if e:
                     msg_str += len(game_names) * f"<:{e.name}:{e.id}>"
@@ -443,7 +445,7 @@ class Gametags:
 
     @game.group(name='add', aliases=['a'], invoke_without_command=True)
     @commands.check(is_admin)
-    async def game_add(self, ctx): 
+    async def game_add(self, ctx):
         """Add or update the following game attribute. (Admin only)"""
 
         # TODO fix so that it shows even if no subcommand is given (now it only shows on wrong subcommand)
@@ -458,7 +460,7 @@ class Gametags:
         """Associate game with given tag. (Admin only)"""
 
         available_tags = self.get_available_tags(ctx.guild)
-        
+
         #tag = discord.utils.get(available_tags, name=tag_name)
         tag = discord.utils.find(
             lambda tag: tag.name.casefold() == tag_name.casefold(), available_tags)
@@ -531,7 +533,7 @@ class Gametags:
                 gtags.append({'tag': tag, 'description': gtag_name})
 
         return gtags
-    
+
     '''
     @game_add.command(name='resource', aliases=['res', 'r'], usage='<game_id> <resources>')
     @commands.check(is_admin)
@@ -574,16 +576,16 @@ class Gametags:
             result = self.igdb.platforms({
                 'ids': platform_id
             })
-            
+
             platforms = result.body
             if platforms:
                 platform = platforms[0]
-                
+
                 try:
                     conn = sqlite3.connect(self.db_path, isolation_level=None)
                     conn.execute('PRAGMA foreign_keys = ON')
                     cursor = conn.cursor()
-                    
+
                     cursor.execute("SELECT 1 FROM platforms WHERE id = ?", [platform['id']])
                     if cursor.fetchone() is None:
                         conn.execute("INSERT INTO platforms (id, name) VALUES (?, ?)", [platform['id'], platform['name']])
@@ -604,16 +606,16 @@ class Gametags:
     @platform.group(name='list', aliases=['ls', 'l'], usage='[all|a]')
     async def platform_list(self, ctx):
         """Lists all available platformtags."""
-        
+
         if ctx.invoked_subcommand.qualified_name != 'platform list':
             return
 
         available_tags = self.get_available_tags(ctx.guild)
 
         if available_tags:
-            
+
             platformtags = self.get_platformtags_from_db(available_tags)
-            
+
             if platformtags:
                 msg_str = ""
                 for platformtag in platformtags:
@@ -648,17 +650,17 @@ class Gametags:
     @platform.command(name='own', aliases=['buy', 'play', 'on'], usage='<platformtags>')
     async def platform_on(self, ctx, *tag_names):
         """Assigns you the listed platformtags."""
-        
+
         selected_tags, unknown_tag_names = self.get_selected_tags(ctx.guild, tag_names)
 
         msg_str = ""
         if selected_tags:
 
             platformtags = self.get_platformtags_from_db(selected_tags)
-            
+
             tags = []
             if platformtags:
-                
+
                 platform_names = []
                 for platformtag in platformtags:
                     tags.append(platformtag['tag'])
@@ -668,12 +670,12 @@ class Gametags:
                 await ctx.author.add_roles(*tags, reason=f"{ctx.author} requested platformtags")
 
                 msg_str += f"{ctx.author.display_name} now plays on "
-                
+
                 if len(platform_names) > 1:
                     msg_str += f"{', '.join(platform_names[0:-1])} and {platform_names[-1]}! "
                 else:
                     msg_str += f"{platform_names[0]}! "
-                
+
                 e = discord.utils.get(ctx.guild.emojis, name='quan')
                 if e:
                     msg_str += len(platform_names) * f"<:{e.name}:{e.id}>"
@@ -695,7 +697,7 @@ class Gametags:
         if selected_tags:
 
             platformtags = self.get_platformtags_from_db(selected_tags)
-            
+
             tags = []
             if platformtags:
 
@@ -707,12 +709,12 @@ class Gametags:
                 await ctx.author.remove_roles(*tags, reason=f"{ctx.author} relinquished platformtags")
 
                 msg_str += f"{ctx.author.display_name} just sold their "
-                
+
                 if len(platform_names) > 1:
                     msg_str += f"{', '.join(platform_names[0:-1])} and {platform_names[-1]}! "
                 else:
                     msg_str += f"{platform_names[0]}! "
-                
+
                 e = discord.utils.get(ctx.guild.emojis, name='salt')
                 if e:
                     msg_str += len(platform_names) * f"<:{e.name}:{e.id}>"
@@ -758,7 +760,7 @@ class Gametags:
 
     @platform.group(name='add', aliases=['a'])
     @commands.check(is_admin)
-    async def platform_add(self, ctx): 
+    async def platform_add(self, ctx):
         """Add or update the following platform attribute. (Admin only)"""
 
         if ctx.invoked_subcommand is None:
@@ -770,7 +772,7 @@ class Gametags:
         """Associate platform with given tag. (Admin only)"""
 
         available_tags = self.get_available_tags(ctx.guild)
-        
+
         tag = discord.utils.find(
             lambda tag: tag.name.casefold() == tag_name.casefold(), available_tags)
 
@@ -818,7 +820,7 @@ class Gametags:
         finally:
             conn.close()
 
-    @commands.group(aliases='t')
+    @commands.group(aliases=['t'])
     async def tag(self, ctx):
         """Commands for tags not belonging to a subcategory (aka generic tags)."""
 
@@ -828,13 +830,13 @@ class Gametags:
     @tag.group(name='list', aliases=['ls', 'l'])
     async def tag_list(self, ctx):
         """Lists all available generic tags."""
-        
+
         available_tags = self.get_available_tags(ctx.guild)
 
         if available_tags:
-            
+
             gentags = self.get_gentags_from_db(available_tags)
-            
+
             if gentags:
                 msg_str = ""
                 for gentag in gentags:
@@ -853,7 +855,7 @@ class Gametags:
         """Create a generic tag, must have a description. (Admin only)"""
 
         available_tags = self.get_available_tags(ctx.guild)
-        
+
         tag = discord.utils.find(
             lambda tag: tag.name.casefold() == tag_name.casefold(), available_tags)
 
@@ -879,7 +881,7 @@ class Gametags:
             existing_gametag = cursor.fetchone()
             cursor.execute("SELECT 1 FROM platform_tags WHERE tag_id = ?", [tag.id])
             existing_platformtag = cursor.fetchone()
-            
+
             if existing_gametag or existing_platformtag:
                 await ctx.send("This tag is already associated with an entity.")
             else:
@@ -900,10 +902,10 @@ class Gametags:
         if selected_tags:
 
             gentags = self.get_gentags_from_db(selected_tags)
-            
+
             tags = []
             if gentags:
-                
+
                 tag_names = []
                 for gentag in gentags:
                     tags.append(gentag['tag'])
@@ -912,12 +914,12 @@ class Gametags:
                 await ctx.author.add_roles(*tags, reason=f"{ctx.author} requested generic tags")
 
                 msg_str += f"{ctx.author.display_name} now has tag"
-                
+
                 if len(tag_names) > 1:
                     msg_str += f"s {', '.join(tag_names[0:-1])} and {tag_names[-1]}! "
                 else:
                     msg_str += f" {tag_names[0]}! "
-                
+
                 e = discord.utils.get(ctx.guild.emojis, name='quan')
                 if e:
                     msg_str += len(tag_names) * f"<:{e.name}:{e.id}>"
@@ -939,10 +941,10 @@ class Gametags:
         if selected_tags:
 
             gentags = self.get_gentags_from_db(selected_tags)
-            
+
             tags = []
             if gentags:
-                
+
                 tag_names = []
                 for gentag in gentags:
                     tags.append(gentag['tag'])
@@ -951,12 +953,12 @@ class Gametags:
                 await ctx.author.remove_roles(*tags, reason=f"{ctx.author} relinquished generic tags")
 
                 msg_str += f"{ctx.author.display_name} just stripped tag"
-                
+
                 if len(tag_names) > 1:
                     msg_str += f"s {', '.join(tag_names[0:-1])} and {tag_names[-1]}! "
                 else:
                     msg_str += f" {tag_names[0]}! "
-                
+
                 e = discord.utils.get(ctx.guild.emojis, name='salt')
                 if e:
                     msg_str += len(tag_names) * f"<:{e.name}:{e.id}>"
