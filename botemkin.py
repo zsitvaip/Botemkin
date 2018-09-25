@@ -42,6 +42,7 @@ class Botemkin(commands.Bot):
     async def on_ready(self):
         log.info(f"logged in as {self.user} with an id of {self.user.id}")
 
+    # TODO print something helpful
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CommandNotFound):
             e = discord.utils.get(ctx.guild.emojis, name='semmiertelme')
