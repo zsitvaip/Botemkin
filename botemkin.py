@@ -48,6 +48,7 @@ class Botemkin(commands.Bot):
             e = discord.utils.get(ctx.guild.emojis, name='semmiertelme')
             if e:
                 await ctx.message.add_reaction(e)
+            await ctx.send("Command not found. Use **!help** to print commands.")
         # TODO copied from /ext/commands/bot.py could change with new versions
         print('Ignoring exception in command {}'.format(ctx.command), file=sys.stderr)
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
@@ -61,7 +62,7 @@ class Botemkin(commands.Bot):
 {member.mention} Üdvözlünk a MAVIK discord szerverén! \
 A szabályzatot a {kozlemenyek.mention} channelben találod, érdemes átolvasni. \
 A {botemkin_pls.mention} channelben tudsz tageket kérni, hogy más is lássa mivel játszol. \
-A !help paranccsal tudsz segítséget kérni a Botemkin használathoz. gl hf!
+A **!help** paranccsal tudsz segítséget kérni a Botemkin használathoz. gl hf!
 """
             await botemkin_pls.send(welcome_str)
         else:
