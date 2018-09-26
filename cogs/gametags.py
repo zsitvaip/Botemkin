@@ -150,12 +150,11 @@ class Gametags:
     async def is_admin(ctx):
         return ctx.author.guild_permissions.administrator
 
-    # TODO fix, was broken by some recent IGDB update it seems
-    # TODO add examples to help message like for other commands
+    # TODO add examples to help message like for other commands and also how it is used in combination with the other admin commands
     @commands.command(name='search', aliases=['s'], usage='<game_name>')
     @commands.check(is_admin)
     async def search_IGDB(self, ctx, *, game_name: str):
-        """Search IGDB for given game name."""
+        """Search IGDB for given game name. (Admin only.)"""
         try:
             result = self.igdb.games({
             'search': game_name,
@@ -165,17 +164,17 @@ class Gametags:
             for game in result.body:
                 games.append(f"#{game['id']} {game['name']} ({game['slug']})")
             if games:
-                await ctx.send(f"Search results from IGDB.com:```css\n{chr(10).join(games)}```")
+                await ctx.send(f"Search results from the *Internet Game Database* (<https://www.igdb.com>):```css\n{chr(10).join(games)}```")
             else:
-                await ctx.send("No search results from IGDB.com.")
-        except:
-            await ctx.send("An error occured.")
+                await ctx.send("No search results from the *Internet Game Database* (<https://www.igdb.com>).")
+        except Exception:
+            await ctx.send("An error occured while accessing external database.")
             raise
 
     @commands.command(name='import', aliases=['i'], usage='<game_id>')
     @commands.check(is_admin)
     async def import_game(self, ctx, game_id: int):
-        """Imports game from external database (IGDB) to internal."""
+        """Imports game from external database (IGDB) to internal. (Admin only.)"""
         try:
             result = self.igdb.games({
                 'ids': game_id
@@ -203,8 +202,8 @@ class Gametags:
 
             else:
                 await ctx.send("Game not found in external database.")
-        except:
-            await ctx.send("An error occured.")
+        except Exception:
+            await ctx.send("An error occured while accessing external database.")
             raise
 
     async def _list_games(self, ctx):
@@ -292,9 +291,9 @@ class Gametags:
                 msg_str += f"{ctx.author.display_name} now plays "
 
                 if len(game_names) > 1:
-                    msg_str += f"{', '.join(game_names[0:-1])} and {game_names[-1]}! "
+                    msg_str += f"*{', '.join(game_names[0:-1])}* and *{game_names[-1]}*! "
                 else:
-                    msg_str += f"{game_names[0]}! "
+                    msg_str += f"*{game_names[0]}*! "
 
                 e = discord.utils.get(ctx.guild.emojis, name='quan')
                 if e:
@@ -303,7 +302,7 @@ class Gametags:
             [unknown_tag_names.append(tag.name) for tag in selected_tags if tag not in tags]
 
         if unknown_tag_names:
-            msg_str += f"```Unknown gametags: {', '.join(unknown_tag_names)}\nTry: !list```"
+            msg_str += f"```Unknown gametags: {', '.join(unknown_tag_names)}```Use **!list** to print available gametags."
 
         await ctx.send(msg_str)
 
@@ -342,9 +341,9 @@ class Gametags:
                 msg_str += f"{ctx.author.display_name} just dropped "
 
                 if len(game_names) > 1:
-                    msg_str += f"{', '.join(game_names[0:-1])} and {game_names[-1]}! "
+                    msg_str += f"*{', '.join(game_names[0:-1])}* and *{game_names[-1]}*! "
                 else:
-                    msg_str += f"{game_names[0]}! "
+                    msg_str += f"*{game_names[0]}*! "
 
                 e = discord.utils.get(ctx.guild.emojis, name='salt')
                 if e:
@@ -353,13 +352,14 @@ class Gametags:
             [unknown_tag_names.append(tag.name) for tag in selected_tags if tag not in tags]
 
         if unknown_tag_names:
-            msg_str += f"```Unknown gametags: {', '.join(unknown_tag_names)}\nTry: !list```"
+            msg_str += f"```Unknown gametags: {', '.join(unknown_tag_names)}```Use **!list** to print available gametags."
 
         await ctx.send(msg_str)
 
-    # TODO make case insensitive
+    # TODO perhaps only display offline members if an extra parameter (such as 'all') is given
     @commands.command(name='players', aliases=['ps'], usage='<gametag>')
-    async def list_players(self, ctx, role: commands.RoleConverter):
+    async def list_players(self, ctx, role_name):
+    # async def list_players(self, ctx, role: commands.RoleConverter):
         """Lists players (and their status) with given gametag.
 
         Usage examples:
@@ -367,6 +367,13 @@ class Gametags:
         !players SFV
         !ps BB
         """
+
+        role = discord.utils.find(
+            lambda role: role.name.casefold() == role_name.casefold(), ctx.guild.roles)
+
+        if not role:
+            await ctx.send(f"```Unknown gametag: {role_name}```Use **!list** to print available gametags.")
+            return
 
         game = None
         try:
@@ -392,9 +399,16 @@ class Gametags:
                 else:
                     msg_str += f"{player.display_name} [{player.status}]\n"
             if msg_str:
-                await ctx.send(f"Players for {game[0]}:```css\n{msg_str}```")
+                msg_str = (f"Players for *{game[0]}*:```css\n{msg_str}```")
             else:
-                await ctx.send("ded game")
+                msg_str = "ded game"
+                e = discord.utils.get(ctx.guild.emojis, name='rip')
+                if e:
+                    msg_str = f"<:{e.name}:{e.id}> {msg_str} <:{e.name}:{e.id}>"
+        else:
+            msg_str = f"```Not a gametag: {role.name}```Use **!list** to print available gametags."
+
+        await ctx.send(msg_str)
 
     # TODO do not create discord role if id not found
     @commands.command(name='tag', aliases=['t'], usage='<game_id> <role_name>')
@@ -477,7 +491,7 @@ class Gametags:
         if isinstance(error, commands.MissingRequiredArgument):
             await self.send_help(ctx)
         else:
-            await ctx.send(error)
+            await ctx.send(f"```{error}```")
         raise error
 
     def send_help(self, ctx):
