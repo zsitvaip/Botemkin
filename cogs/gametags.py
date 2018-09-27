@@ -27,29 +27,30 @@ class Gametags:
         pathlib.Path(self.data_dir).mkdir(parents=True, exist_ok=True)
         try:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
-            conn.execute('PRAGMA journal_mode = wal')
-            conn.execute('PRAGMA foreign_keys = ON')
+            cursor = conn.cursor()
+            cursor.execute('PRAGMA journal_mode = wal')
+            cursor.execute('PRAGMA foreign_keys = ON')
 
-            conn.execute('BEGIN')
-            conn.execute("""
+            cursor.execute('BEGIN')
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS tags (
                     id INTEGER PRIMARY KEY,
                     description TEXT
                 )"""
             )
-            conn.execute("""
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS games (
                     id INTEGER PRIMARY KEY,
                     name TEXT
                 )"""
             )
-            conn.execute("""
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS platforms (
                     id INTEGER PRIMARY KEY,
                     name TEXT
                 )"""
             )
-            conn.execute("""
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS game_tags (
                     tag_id INTEGER,
                     game_id INTEGER,
@@ -58,7 +59,7 @@ class Gametags:
                     FOREIGN KEY (game_id) REFERENCES games(id)
                 )"""
             )
-            conn.execute("""
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS platform_tags (
                     tag_id INTEGER,
                     platform_id INTEGER,
@@ -67,7 +68,7 @@ class Gametags:
                     FOREIGN KEY (platform_id) REFERENCES platforms(id)
                 )"""
             )
-            conn.execute("""
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS game_details (
                     game_id INTEGER,
                     guild_id INTEGER,
@@ -87,6 +88,7 @@ class Gametags:
         everyone_role = discord.utils.find(
             lambda role: role.id == guild.id, guild.roles)
 
+        # TODO this doesn't seem to actually filter out roles by permission
         available_tags = list(filter(
             lambda role: role.id != everyone_role.id and role.permissions <= everyone_role.permissions, guild.roles))
 
@@ -110,7 +112,7 @@ class Gametags:
 
         return selected_tags, unknown_tag_names
 
-    def get_gametags_from_db(self, tags, *, all = False):
+    async def get_gametags_from_db(self, tags, *, all = False):
         rows = []
         try:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
@@ -171,47 +173,54 @@ class Gametags:
             await ctx.send("An error occured while accessing external database.")
             raise
 
-    @commands.command(name='import', aliases=['i'], usage='<game_id>')
+    async def _import_game(self, ctx, game_id: int):
+        try:
+            conn = sqlite3.connect(self.db_path, isolation_level=None)
+            cursor = conn.cursor()
+            cursor.execute('PRAGMA foreign_keys = ON')
+
+            cursor.execute("SELECT games.name FROM games WHERE id = ?", [game_id])
+
+            row = cursor.fetchone()
+            game_name = row[0] if row else None
+            if game_name is None:
+                result = self.igdb.games({
+                    'ids': game_id
+                })
+
+                games = result.body
+                if games:
+                    game = games[0]
+                    game_name = game['name']
+                    cursor.execute("INSERT INTO games (id, name) VALUES (?, ?)", [game['id'], game['name']])
+                    await ctx.send("Game added to internal database.")
+                else:
+                    await ctx.send("Game not found in external database.")
+            else:
+                await ctx.send("Game already in internal database.")
+
+            return game_name
+
+        except Exception:
+            await ctx.send("An error occured while importing game.")
+            raise
+        finally:
+            conn.close()
+
+    # TODO add usage examples in help
+    @commands.command(hidden=True, name='import', aliases=['i'], usage='<game_id>')
     @commands.check(is_admin)
     async def import_game(self, ctx, game_id: int):
         """Imports game from external database (IGDB) to internal. (Admin only.)"""
-        try:
-            result = self.igdb.games({
-                'ids': game_id
-            })
 
-            games = result.body
-            if games:
-                game = games[0]
-
-                try:
-                    conn = sqlite3.connect(self.db_path, isolation_level=None)
-                    conn.execute('PRAGMA foreign_keys = ON')
-                    cursor = conn.cursor()
-
-                    cursor.execute("SELECT 1 FROM games WHERE id = ?", [game['id']])
-                    if cursor.fetchone() is None:
-                        conn.execute("INSERT INTO games (id, name) VALUES (?, ?)", [game['id'], game['name']])
-                        await ctx.send("Game added to internal database.")
-                    else:
-                        await ctx.send("Game already in internal database.")
-                except:
-                    raise
-                finally:
-                    conn.close()
-
-            else:
-                await ctx.send("Game not found in external database.")
-        except Exception:
-            await ctx.send("An error occured while accessing external database.")
-            raise
+        await self._import_game(ctx, game_id)
 
     async def _list_games(self, ctx):
         available_tags = self.get_available_tags(ctx.guild)
 
         if available_tags:
 
-            gametags = self.get_gametags_from_db(available_tags)
+            gametags = await self.get_gametags_from_db(available_tags)
 
             if gametags:
                 msg_str = ""
@@ -226,7 +235,7 @@ class Gametags:
     async def _list_all_games(self, ctx):
         available_tags = self.get_available_tags(ctx.guild)
 
-        gametags = self.get_gametags_from_db(available_tags, all=True)
+        gametags = await self.get_gametags_from_db(available_tags, all=True)
         if gametags:
             msg_str = ""
             for gametag in gametags:
@@ -267,15 +276,14 @@ class Gametags:
 
         # required because *tag_names being empty does not trigger a MissingRequiredArgument
         if not tag_names:
-            await self.send_help(ctx)
-            return
+            return await self.send_help(ctx)
 
         selected_tags, unknown_tag_names = self.get_selected_tags(ctx.guild, tag_names)
 
         msg_str = ""
         if selected_tags:
 
-            gametags = self.get_gametags_from_db(selected_tags)
+            gametags = await self.get_gametags_from_db(selected_tags)
 
             tags = []
             if gametags:
@@ -318,15 +326,14 @@ class Gametags:
 
         # required because *tag_names being empty does not trigger a MissingRequiredArgument
         if not tag_names:
-            await self.send_help(ctx)
-            return
+            return await self.send_help(ctx)
 
         selected_tags, unknown_tag_names = self.get_selected_tags(ctx.guild, tag_names)
 
         msg_str = ""
         if selected_tags:
 
-            gametags = self.get_gametags_from_db(selected_tags)
+            gametags = await self.get_gametags_from_db(selected_tags)
 
             tags = []
             if gametags:
@@ -359,7 +366,6 @@ class Gametags:
     # TODO perhaps only display offline members if an extra parameter (such as 'all') is given
     @commands.command(name='players', aliases=['ps'], usage='<gametag>')
     async def list_players(self, ctx, role_name):
-    # async def list_players(self, ctx, role: commands.RoleConverter):
         """Lists players (and their status) with given gametag.
 
         Usage examples:
@@ -372,10 +378,9 @@ class Gametags:
             lambda role: role.name.casefold() == role_name.casefold(), ctx.guild.roles)
 
         if not role:
-            await ctx.send(f"```Unknown gametag: {role_name}```Use **!list** to print available gametags.")
-            return
+            return await ctx.send(f"```Unknown gametag: {role_name}```Use **!list** to print available gametags.")
 
-        game = None
+        game_name = None
         try:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
             cursor = conn.cursor()
@@ -387,11 +392,12 @@ class Gametags:
                 WHERE game_tags.tag_id = ?
             """, [role.id])
 
-            game = cursor.fetchone()
+            row = cursor.fetchone()
+            game_name = row[0] if row else None
         finally:
             conn.close()
 
-        if game:
+        if game_name:
             msg_str = ""
             for player in role.members:
                 if player.status == discord.Status.offline:
@@ -399,7 +405,7 @@ class Gametags:
                 else:
                     msg_str += f"{player.display_name} [{player.status}]\n"
             if msg_str:
-                msg_str = (f"Players for *{game[0]}*:```css\n{msg_str}```")
+                msg_str = (f"Players for *{game_name}*:```css\n{msg_str}```")
             else:
                 msg_str = "ded game"
                 e = discord.utils.get(ctx.guild.emojis, name='rip')
@@ -416,14 +422,18 @@ class Gametags:
     async def tag_game(self, ctx, game_id: int, tag_name):
         """Associate game with given tag. (Admin only.)
 
-        Requires first importing the game via !import.
-
         Usage example:
         !tag 80207 ABK
         !t 76885 SCVI
         """
 
+        game_name = await self._import_game(ctx, game_id)
+        if not game_name:
+            return
+
         available_tags = self.get_available_tags(ctx.guild)
+
+        # TODO maybe check if role is already used for another game?
 
         #tag = discord.utils.get(available_tags, name=tag_name)
         tag = discord.utils.find(
@@ -443,30 +453,23 @@ class Gametags:
             else:
                 await msg.edit(content="Discord role created.")
 
-        games = []
         try:
             conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            cursor.execute("SELECT id, name FROM games WHERE id = ?", [game_id])
-            game = cursor.fetchone()
-            if game is None:
-                await ctx.send("No game found with that ID in internal database. Try importing it first.")
-            else:
-                # insert or replace into tags
-                cursor.execute("""
-                    REPLACE INTO tags (id)
-                    VALUES (?)
-                """, [tag.id])
-                # insert or replace into game_tags
-                cursor.execute("""
-                    REPLACE INTO game_tags (tag_id, game_id)
-                    VALUES (?, ?)
-                """, [tag.id, game['id']])
+            # insert or replace into tags
+            cursor.execute("""
+                REPLACE INTO tags (id)
+                VALUES (?)
+            """, [tag.id])
+            # insert or replace into game_tags
+            cursor.execute("""
+                REPLACE INTO game_tags (tag_id, game_id)
+                VALUES (?, ?)
+            """, [tag.id, game_id])
 
-                conn.commit()
-                await ctx.send(f"```'{tag.name}' is now associated with '{game['name']}'```")
+            conn.commit()
+            await ctx.send(f"The gametag {tag.mention} is now associated with *{game_name}*.")
         except:
             conn.rollback()
             raise
@@ -494,8 +497,8 @@ class Gametags:
             await ctx.send(f"```{error}```")
         raise error
 
-    def send_help(self, ctx):
-        return ctx.invoke(self.bot.get_command('help'), ctx.command.name)
+    async def send_help(self, ctx):
+        return await ctx.invoke(self.bot.get_command('help'), ctx.command.name)
 
 def setup(bot):
     bot.add_cog(Gametags(bot))
