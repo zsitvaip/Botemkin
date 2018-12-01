@@ -1,29 +1,437 @@
-import discord
-from discord.ext import commands
+from collections import namedtuple
+from enum import Enum
 import logging
 import pathlib
 import sqlite3
+
+import discord
+from discord.ext import commands
 from igdb_api_python.igdb import igdb as igdb
 
 from . import config
 
 log = logging.getLogger(__name__)
 
+class ItemType(Enum):
+    game = 1
+    platform = 2
+
+    def __str__(self):
+        return self.name
+
+    # TODO really this should be a lookup in a list/dict
+    def pre(self):
+        if self.value is 1:
+            return ''
+        if self.value is 2:
+            return 'on '
+
+# TODO python 3.7: consider changing these to dataclasses, setting defaults is also simpler
+Item = namedtuple('Item', 'type id name slug')
+Item.__new__.__defaults__ = (None,) * len(Item._fields)
+
+Itemtag = namedtuple('Itemtag', 'item tag')
+
 class Gametags:
     """Module for handling self-assignable roles (aka tags)."""
 
     def __init__(self, bot):
         self.bot = bot
+        self.repository = ItemtagRepository()
+        self.repository.setup()
+        self.igdb_wrapper = IgdbWrapper(config.igdb_key)
 
-        self.gametag_dict = {}
+    async def is_admin(ctx):
+        return ctx.author.guild_permissions.administrator
+
+    # TODO make async?
+    def _get_available_tags(self, guild : discord.Guild):
+        everyone_role = discord.utils.find(
+            lambda role: role.id == guild.id, guild.roles)
+
+        # TODO this doesn't seem to actually filter out roles by permission
+        available_tags = list(filter(
+            lambda role: role.id != everyone_role.id and role.permissions <= everyone_role.permissions, guild.roles))
+
+        return available_tags
+
+    # TODO make async?
+    def _get_selected_tags(self, guild : discord.Guild, requested_tag_names: list):
+        # TODO use sets and the intersection/difference functions
+        available_tags = self._get_available_tags(guild)
+
+        selected_tags = []
+        unknown_tag_names = []
+        for tag_name in requested_tag_names:
+
+            requested_tag = discord.utils.find(
+                lambda tag: tag.name.casefold() == tag_name.casefold(), available_tags)
+
+            if requested_tag:
+                selected_tags.append(requested_tag)
+            else:
+                unknown_tag_names.append(tag_name)
+
+        return selected_tags, unknown_tag_names
+
+    async def _search_IGDB_item(self, ctx, item_type, item_name):
+        try:
+            items = await self.igdb_wrapper.find_items_by_name(item_type, item_name)
+            table_rows = []
+            for item in items:
+                table_rows.append(f"#{item.id} {item.name} ({item.slug})")
+            if table_rows:
+                await ctx.send(f"Search results from the *Internet Game Database* (<https://www.igdb.com>):```css\n{chr(10).join(table_rows)}```")
+            else:
+                await ctx.send("No search results from the *Internet Game Database* (<https://www.igdb.com>).")
+        except:
+            await ctx.send("An error occured while accessing the *Internet Game Database* (<https://www.igdb.com>).")
+            raise
+
+    @commands.command(name='search_game', aliases=['search', 'sg', 's'], usage='<game_name>')
+    @commands.check(is_admin)
+    async def search_IGDB_game(self, ctx, *, game_name):
+        """Search IGDB for given game name. (Admin only.)
+
+        Used to get the game id to be used with the !tag_game command.
+
+        Usage examples:
+        !search puyo tetris
+        !s dong never die
+        """
+        await self._search_IGDB_item(ctx, ItemType.game, game_name)
+
+    @commands.command(name='search_platform', aliases=['search_plat', 'sp'], usage='<platform_name>')
+    @commands.check(is_admin)
+    async def search_IGDB_platform(self, ctx, *, platform_name):
+        """Search IGDB for given platform name. (Admin only.)
+
+        Use to get the platform id to be used with the !tag_platform command.
+
+        !search_plat plebstation
+        !sp pc masterrace
+        """
+        await self._search_IGDB_item(ctx, ItemType.platform, platform_name)
+
+    async def _print_itemtags(self, item_type, available_tags):
+        msg_str = ""
+        itemtags = await self.repository.find_itemtags_by_tags(item_type, available_tags)
+        if itemtags:
+            for itemtag in itemtags:
+                msg_str += f"{itemtag.tag.name} [{itemtag.item.name}]#{itemtag.item.id}\n"
+            msg_str = f"Available {item_type}tags:```css\n{msg_str}```"
+        else:
+            msg_str = f"```There are currently no available {item_type}tags.```"
+        return msg_str
+
+    async def _print_all_itemtags(self, item_type, available_tags):
+        msg_str = ""
+        itemtags = await self.repository.find_itemtags_by_tags(item_type, available_tags, all=True)
+        if itemtags:
+            for itemtag in itemtags:
+                itemtag_name = "\t"
+                if itemtag.tag:
+                    itemtag_name = f"{itemtag.tag.name} "
+                msg_str += f"{itemtag_name}[{itemtag.item.name}]#{itemtag.item.id}\n"
+            msg_str = f"Imported {item_type}s:```css\n{msg_str}```"
+        else:
+            msg_str = f"```There are currently no imported {item_type}s.```"
+        return msg_str
+
+    async def _list_available_tags(self, ctx):
+        msg_str = ""
+        available_tags = self._get_available_tags(ctx.guild)
+        if available_tags:
+            msg_str += await self._print_itemtags(ItemType.game, available_tags)
+            msg_str += await self._print_itemtags(ItemType.platform, available_tags)
+        else:
+            msg_str = f"```There are currently no available tags.```"
+        await ctx.send(msg_str)
+
+    async def _list_all_tags(self, ctx):
+        msg_str = ""
+        available_tags = self._get_available_tags(ctx.guild)
+        msg_str += await self._print_all_itemtags(ItemType.game, available_tags)
+        msg_str += await self._print_all_itemtags(ItemType.platform, available_tags)
+        await ctx.send(msg_str)
+
+    @commands.command(name='list', aliases=['ls', 'l'], usage='[all]')
+    async def list_available_tags(self, ctx, arg=None):
+        """Lists available tags.
+
+        Use with 'all' to show all games/platforms imported from IGDB including ones without tags associated with them.
+
+        Usage examples:
+        !list
+        !ls all
+        !l a
+        """
+
+        if arg in ['a', 'al', 'all']:
+            await self._list_all_tags(ctx)
+        else:
+            await self._list_available_tags(ctx)
+
+    async def _assign_tags_by_name(self, ctx, item_type, tag_names):
+        selected_tags, unknown_tag_names = self._get_selected_tags(ctx.guild, tag_names)
+        msg_str = ""
+        if selected_tags:
+
+            itemtags = await self.repository.find_itemtags_by_tags(item_type, selected_tags)
+            tags = []
+            if itemtags:
+
+                item_names = []
+                for itemtag in itemtags:
+                    tags.append(itemtag.tag)
+                    item_names.append(itemtag.item.name)
+
+                # TODO handle permission denied
+                await ctx.author.add_roles(*tags, reason=f"{ctx.author} requested {item_type}tags")
+
+                msg_str += f"{ctx.author.display_name} now plays {item_type.pre()}"
+
+                if len(item_names) > 1:
+                    msg_str += f"*{', '.join(item_names[0:-1])}* and *{item_names[-1]}*! "
+                else:
+                    msg_str += f"*{item_names[0]}*! "
+
+                e = discord.utils.get(ctx.guild.emojis, name='quan')
+                if e:
+                    msg_str += len(item_names) * f"<:{e.name}:{e.id}>"
+
+            [unknown_tag_names.append(tag.name) for tag in selected_tags if tag not in tags]
+
+        if unknown_tag_names:
+            msg_str += f"```Unknown {item_type}tags: {', '.join(unknown_tag_names)}```Use **!list** to print available {item_type}tags."
+
+        await ctx.send(msg_str)
+
+
+    @commands.command(name='play', aliases=['p'], usage='<gametags>')
+    async def play_game(self, ctx, *tag_names):
+        """Assigns you the listed gametags.
+
+        Usage examples:
+
+        !play T7
+        !p GG Melty UNIST
+        """
+
+        # required because *tag_names being empty does not trigger a MissingRequiredArgument
+        if not tag_names:
+            await self._send_help(ctx)
+            return
+        await self._assign_tags_by_name(ctx, ItemType.game, tag_names)
+
+    @commands.command(name='platform', aliases=['plat'], usage='<platformtags>')
+    async def play_on_platform(self, ctx, *tag_names):
+        """Assigns you the listed platformtags.
+
+        Usage examples:
+
+        !play PC
+        !p PS4 XBONE
+        """
+
+        # required because *tag_names being empty does not trigger a MissingRequiredArgument
+        if not tag_names:
+            await self._send_help(ctx)
+            return
+        await self._assign_tags_by_name(ctx, ItemType.platform, tag_names)
+
+    async def _remove_any_tags_by_name(self, ctx, tag_names):
+        selected_tags, unknown_tag_names = self._get_selected_tags(ctx.guild, tag_names)
+        msg_str = ""
+        if selected_tags:
+
+            gametags = await self.repository.find_itemtags_by_tags(ItemType.game, selected_tags)
+            platformtags = await self.repository.find_itemtags_by_tags(ItemType.platform, selected_tags)
+            itemtags = gametags + platformtags
+            tags = []
+            if itemtags:
+
+                item_names = []
+                for itemtag in itemtags:
+                    tags.append(itemtag.tag)
+                    item_names.append(itemtag.item.name)
+
+                await ctx.author.remove_roles(*tags, reason=f"{ctx.author} relinquished tags")
+
+                msg_str += f"{ctx.author.display_name} just dropped "
+
+                if len(item_names) > 1:
+                    msg_str += f"*{', '.join(item_names[0:-1])}* and *{item_names[-1]}*! "
+                else:
+                    msg_str += f"*{item_names[0]}*! "
+
+                e = discord.utils.get(ctx.guild.emojis, name='salt')
+                if e:
+                    msg_str += len(item_names) * f"<:{e.name}:{e.id}>"
+
+            [unknown_tag_names.append(tag.name) for tag in selected_tags if tag not in tags]
+
+        if unknown_tag_names:
+            msg_str += f"```Unknown tags: {', '.join(unknown_tag_names)}```Use **!list** to print available tags."
+
+        await ctx.send(msg_str)
+
+    @commands.command(name='drop', aliases=['d'], usage='<tags>')
+    async def drop(self, ctx, *tag_names):
+        """Removes your listed tags.
+
+        Usage examples:
+
+        !drop IJ2
+        !d DBFZ BBTag
+        """
+
+        # required because *tag_names being empty does not trigger a MissingRequiredArgument
+        if not tag_names:
+            await self._send_help(ctx)
+            return
+        await self._remove_any_tags_by_name(ctx, tag_names)
+
+    # TODO perhaps only display offline members if an extra parameter (such as 'all') is given
+    @commands.command(name='players', aliases=['ps'], usage='<tag>')
+    async def show_players(self, ctx, role_name):
+        """Shows players (and their status) with given tag.
+
+        Usage examples:
+
+        !players SFV
+        !ps PS4
+        """
+
+        role = discord.utils.find(
+            lambda role: role.name.casefold() == role_name.casefold(), ctx.guild.roles)
+
+        if not role:
+            await ctx.send(f"```Unknown tag: {role_name}```Use **!list** to print available tags.")
+            return
+
+        item = await self.repository.find_any_item_by_tag(role)
+        if item:
+            msg_str = ""
+            for player in role.members:
+                if player.status == discord.Status.offline:
+                    msg_str += f"{player.display_name} #{player.status}\n"
+                else:
+                    msg_str += f"{player.display_name} [{player.status}]\n"
+            if msg_str:
+                msg_str = (f"*{item.name}* players:```css\n{msg_str}```")
+            else:
+                msg_str = f"*{role_name}* is a **DEAD** {item.type}"
+                e = discord.utils.get(ctx.guild.emojis, name='rip')
+                if e:
+                    msg_str = f"<:{e.name}:{e.id}> {msg_str} <:{e.name}:{e.id}>"
+        else:
+            msg_str = f"```Not a tag: {role.name}```Use **!list** to print available tags."
+
+        await ctx.send(msg_str)
+
+    async def _tag_item(self, ctx, item_type, item_id, tag_name):
+        item = await self.igdb_wrapper.find_item_by_id(item_type, item_id)
+        if item:
+            ret = await self.repository.add_item(item)
+            if ret:
+                await ctx.send(f"Added *{item.name}* to internal database.")
+            else:
+                await ctx.send(f"Found *{item.name}* in internal database.")
+        else:
+            await ctx.send(f"Could not find {item_type} in external database.")
+            return
+
+        available_tags = self._get_available_tags(ctx.guild)
+
+        # TODO maybe check if role is already used for another game?
+
+        tag = discord.utils.find(
+            lambda tag: tag.name.casefold() == tag_name.casefold(), available_tags)
+        if tag is None:
+            msg = await ctx.send("No existing tag found by that name, creating now.")
+            try:
+                tag = await ctx.guild.create_role(
+                    name=tag_name,
+                    mentionable=True,
+                    reason=f"{ctx.author} requested role creation through {ctx.command.name}"
+                    )
+            except:
+                await msg.edit(content="Failed to create Discord role.")
+                raise
+            else:
+                await msg.edit(content="Discord role created.")
+
+        itemtag = Itemtag(item, tag)
+        try:
+            await self.repository.add_itemtag(itemtag)
+        except:
+            await ctx.send(f"Failed to add {item_type}tag to internal database.")
+            raise
+        await ctx.send(f"The {item_type}tag {tag.mention} is now associated with *{item.name}*.")
+
+    @commands.command(name='tag_game', aliases=['tag', 'tg', 't'], usage='<game_id> <role_name>')
+    @commands.check(is_admin)
+    async def tag_game(self, ctx, game_id: int, tag_name: str):
+        """Associate game with given tag. (Admin only.)
+
+        To find the game id use the !search_game command.
+
+        Usage example:
+        !tag 80207 ABK
+        !t 76885 SCVI
+        """
+        await self._tag_item(ctx, ItemType.game, game_id, tag_name)
+
+    @commands.command(name='tag_platform', aliases=['tag_plat', 'tp'], usage='<game_id> <role_name>')
+    @commands.check(is_admin)
+    async def tag_platform(self, ctx, platform_id: int, tag_name: str):
+        """Associate platform with given tag. (Admin only.)
+
+        To find the platform id use the !search_platform command.
+
+        Usage example:
+        !tag 6 PC
+        !t 48 PS4
+        """
+        await self._tag_item(ctx, ItemType.platform, platform_id, tag_name)
+
+    # non admin-only commands print their !help when not enough arguments are given
+    @play_game.error
+    @play_on_platform.error
+    @drop.error
+    @show_players.error
+    async def _missing_required_argument_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await self._send_help(ctx)
+        raise error
+
+    # admin-only commands print !help like regular ones but also print other errors
+    @search_IGDB_game.error
+    @search_IGDB_platform.error
+    @tag_game.error
+    @tag_platform.error
+    async def _verbose_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await self._send_help(ctx)
+        else:
+            await ctx.send(f"```{error}```")
+        raise error
+
+    async def _send_help(self, ctx):
+        return await ctx.invoke(self.bot.get_command('help'), ctx.command.name)
+
+def setup(bot):
+    bot.add_cog(Gametags(bot))
+
+class ItemtagRepository:
+
+    def __init__(self):
         self.data_dir = 'data/'
         self.db_path = f'{self.data_dir}gametag.db'
-        self.setup_db()
-
-        self.igdb = igdb(config.igdb_key)
 
     # TODO rethink DB scheme
-    def setup_db(self):
+    def setup(self):
         pathlib.Path(self.data_dir).mkdir(parents=True, exist_ok=True)
         try:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
@@ -41,20 +449,20 @@ class Gametags:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS games (
                     id INTEGER PRIMARY KEY,
-                    name TEXT
+                    name TEXT NOT NULL
                 )"""
             )
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS platforms (
                     id INTEGER PRIMARY KEY,
-                    name TEXT
+                    name TEXT NOT NULL
                 )"""
             )
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS game_tags (
                     tag_id INTEGER,
-                    game_id INTEGER,
-                    PRIMARY KEY (tag_id, game_id),
+                    game_id INTEGER NOT NULL UNIQUE,
+                    PRIMARY KEY (tag_id),
                     FOREIGN KEY (tag_id) REFERENCES tags(id),
                     FOREIGN KEY (game_id) REFERENCES games(id)
                 )"""
@@ -62,19 +470,10 @@ class Gametags:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS platform_tags (
                     tag_id INTEGER,
-                    platform_id INTEGER,
-                    PRIMARY KEY (tag_id, platform_id),
+                    platform_id INTEGER NOT NULL UNIQUE,
+                    PRIMARY KEY (tag_id),
                     FOREIGN KEY (tag_id) REFERENCES tags(id),
                     FOREIGN KEY (platform_id) REFERENCES platforms(id)
-                )"""
-            )
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS game_details (
-                    game_id INTEGER,
-                    guild_id INTEGER,
-                    resources TEXT,
-                    PRIMARY KEY (game_id, guild_id),
-                    FOREIGN KEY (game_id) REFERENCES games(id)
                 )"""
             )
             conn.commit()
@@ -84,374 +483,21 @@ class Gametags:
         finally:
             conn.close()
 
-    def get_available_tags(self, guild : discord.Guild):
-        everyone_role = discord.utils.find(
-            lambda role: role.id == guild.id, guild.roles)
-
-        # TODO this doesn't seem to actually filter out roles by permission
-        available_tags = list(filter(
-            lambda role: role.id != everyone_role.id and role.permissions <= everyone_role.permissions, guild.roles))
-
-        return available_tags
-
-    def get_selected_tags(self, guild : discord.Guild, requested_tag_names: list):
-        # TODO use sets and the intersection/difference functions
-        available_tags = self.get_available_tags(guild)
-
-        selected_tags = []
-        unknown_tag_names = []
-        for tag_name in requested_tag_names:
-
-            requested_tag = discord.utils.find(
-                lambda tag: tag.name.casefold() == tag_name.casefold(), available_tags)
-
-            if requested_tag:
-                selected_tags.append(requested_tag)
-            else:
-                unknown_tag_names.append(tag_name)
-
-        return selected_tags, unknown_tag_names
-
-    async def get_gametags_from_db(self, tags, *, all = False):
-        rows = []
+    async def add_item(self, item):
         try:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
             cursor = conn.cursor()
-
-            if all:
-                cursor.execute(f"""
-                    SELECT game_tags.tag_id, games.id, games.name
-                    FROM games
-                    LEFT OUTER JOIN game_tags ON games.id = game_tags.game_id
-                    ORDER BY games.name ASC
-                """)
-            else:
-                cursor.execute(f"""
-                    SELECT game_tags.tag_id, games.id, games.name
-                    FROM games
-                    INNER JOIN game_tags ON games.id = game_tags.game_id
-                    WHERE game_tags.tag_id IN (?{(len(tags) - 1) * ', ?'})
-                    ORDER BY games.name ASC
-                """, [tag.id for tag in tags])
-            rows = cursor.fetchall()
+            cursor.execute(f"INSERT INTO {item.type}s (id, name) VALUES (?, ?)", [item.id, item.name])
+            return True
+        except sqlite3.IntegrityError:
+            return False
         finally:
             conn.close()
 
-        # TODO remove, this was just for debugging
-        # for row in rows:
-        #     print(row)
-
-        gametags = []
-        if rows:
-            for tag_id, game_id, game_name in rows:
-                tag = discord.utils.get(tags, id=tag_id)
-                gametags.append({'tag': tag, 'game_id': game_id, 'game_name': game_name})
-
-        return gametags
-
-    async def is_admin(ctx):
-        return ctx.author.guild_permissions.administrator
-
-    # TODO add examples to help message like for other commands and also how it is used in combination with the other admin commands
-    @commands.command(name='search', aliases=['s'], usage='<game_name>')
-    @commands.check(is_admin)
-    async def search_IGDB(self, ctx, *, game_name: str):
-        """Search IGDB for given game name. (Admin only.)"""
-        try:
-            result = self.igdb.games({
-            'search': game_name,
-            'fields': ['name', 'slug']
-            })
-            games = []
-            for game in result.body:
-                games.append(f"#{game['id']} {game['name']} ({game['slug']})")
-            if games:
-                await ctx.send(f"Search results from the *Internet Game Database* (<https://www.igdb.com>):```css\n{chr(10).join(games)}```")
-            else:
-                await ctx.send("No search results from the *Internet Game Database* (<https://www.igdb.com>).")
-        except Exception:
-            await ctx.send("An error occured while accessing external database.")
-            raise
-
-    async def _import_game(self, ctx, game_id: int):
-        try:
-            conn = sqlite3.connect(self.db_path, isolation_level=None)
-            cursor = conn.cursor()
-            cursor.execute('PRAGMA foreign_keys = ON')
-
-            cursor.execute("SELECT games.name FROM games WHERE id = ?", [game_id])
-
-            row = cursor.fetchone()
-            game_name = row[0] if row else None
-            if game_name is None:
-                result = self.igdb.games({
-                    'ids': game_id
-                })
-
-                games = result.body
-                if games:
-                    game = games[0]
-                    game_name = game['name']
-                    cursor.execute("INSERT INTO games (id, name) VALUES (?, ?)", [game['id'], game['name']])
-                    await ctx.send("Game added to internal database.")
-                else:
-                    await ctx.send("Game not found in external database.")
-            else:
-                await ctx.send("Game already in internal database.")
-
-            return game_name
-
-        except Exception:
-            await ctx.send("An error occured while importing game.")
-            raise
-        finally:
-            conn.close()
-
-    # TODO add usage examples in help
-    @commands.command(hidden=True, name='import', aliases=['i'], usage='<game_id>')
-    @commands.check(is_admin)
-    async def import_game(self, ctx, game_id: int):
-        """Imports game from external database (IGDB) to internal. (Admin only.)"""
-
-        await self._import_game(ctx, game_id)
-
-    async def _list_games(self, ctx):
-        available_tags = self.get_available_tags(ctx.guild)
-
-        if available_tags:
-
-            gametags = await self.get_gametags_from_db(available_tags)
-
-            if gametags:
-                msg_str = ""
-                for gametag in gametags:
-                    msg_str += f"{gametag['tag'].name} [{gametag['game_name']}]#{gametag['game_id']}\n"
-                await ctx.send(f"Available gametags:```css\n{msg_str}```")
-            else:
-                await ctx.send(f"```There are currently no available gametags.```")
-        else:
-            await ctx.send(f"```There are currently no available tags.```")
-
-    async def _list_all_games(self, ctx):
-        available_tags = self.get_available_tags(ctx.guild)
-
-        gametags = await self.get_gametags_from_db(available_tags, all=True)
-        if gametags:
-            msg_str = ""
-            for gametag in gametags:
-                gametag_name = "\t"
-                if gametag['tag']:
-                    gametag_name = f"{gametag['tag'].name} "
-                msg_str += f"{gametag_name}[{gametag['game_name']}]#{gametag['game_id']}\n"
-            await ctx.send(f"Imported games:```css\n{msg_str}```")
-        else:
-            await ctx.send(f"```There are currently no imported games.```")
-
-    @commands.command(name='list', aliases=['ls', 'l'], usage='[all]')
-    async def list_games(self, ctx, arg=None):
-        """Lists available gametags.
-
-        Use with 'all' to show all games imported from IGDB including ones without gametags associated with them.
-
-        Usage examples:
-        !list
-        !ls all
-        !l a
-        """
-
-        if arg in ['a', 'al', 'all']:
-            await self._list_all_games(ctx)
-        else:
-            await self._list_games(ctx)
-
-    @commands.command(name='play', aliases=['p'], usage='<gametags>')
-    async def play_game(self, ctx, *tag_names):
-        """Assigns you the listed gametags.
-
-        Usage examples:
-
-        !play T7
-        !p GG Melty UNIST
-        """
-
-        # required because *tag_names being empty does not trigger a MissingRequiredArgument
-        if not tag_names:
-            return await self.send_help(ctx)
-
-        selected_tags, unknown_tag_names = self.get_selected_tags(ctx.guild, tag_names)
-
-        msg_str = ""
-        if selected_tags:
-
-            gametags = await self.get_gametags_from_db(selected_tags)
-
-            tags = []
-            if gametags:
-
-                game_names = []
-                for gametag in gametags:
-                    tags.append(gametag['tag'])
-                    game_names.append(gametag['game_name'])
-
-                # TODO handle permission denied
-                await ctx.author.add_roles(*tags, reason=f"{ctx.author} requested gametags")
-
-                msg_str += f"{ctx.author.display_name} now plays "
-
-                if len(game_names) > 1:
-                    msg_str += f"*{', '.join(game_names[0:-1])}* and *{game_names[-1]}*! "
-                else:
-                    msg_str += f"*{game_names[0]}*! "
-
-                e = discord.utils.get(ctx.guild.emojis, name='quan')
-                if e:
-                    msg_str += len(game_names) * f"<:{e.name}:{e.id}>"
-
-            [unknown_tag_names.append(tag.name) for tag in selected_tags if tag not in tags]
-
-        if unknown_tag_names:
-            msg_str += f"```Unknown gametags: {', '.join(unknown_tag_names)}```Use **!list** to print available gametags."
-
-        await ctx.send(msg_str)
-
-    @commands.command(name='drop', aliases=['d'], usage='<gametags>')
-    async def drop_game(self, ctx, *tag_names):
-        """Removes your listed gametags.
-
-        Usage examples:
-
-        !drop IJ2
-        !d DBFZ BBTag
-        """
-
-        # required because *tag_names being empty does not trigger a MissingRequiredArgument
-        if not tag_names:
-            return await self.send_help(ctx)
-
-        selected_tags, unknown_tag_names = self.get_selected_tags(ctx.guild, tag_names)
-
-        msg_str = ""
-        if selected_tags:
-
-            gametags = await self.get_gametags_from_db(selected_tags)
-
-            tags = []
-            if gametags:
-
-                game_names = []
-                for gametag in gametags:
-                    tags.append(gametag['tag'])
-                    game_names.append(gametag['game_name'])
-
-                await ctx.author.remove_roles(*tags, reason=f"{ctx.author} relinquished gametags")
-
-                msg_str += f"{ctx.author.display_name} just dropped "
-
-                if len(game_names) > 1:
-                    msg_str += f"*{', '.join(game_names[0:-1])}* and *{game_names[-1]}*! "
-                else:
-                    msg_str += f"*{game_names[0]}*! "
-
-                e = discord.utils.get(ctx.guild.emojis, name='salt')
-                if e:
-                    msg_str += len(game_names) * f"<:{e.name}:{e.id}>"
-
-            [unknown_tag_names.append(tag.name) for tag in selected_tags if tag not in tags]
-
-        if unknown_tag_names:
-            msg_str += f"```Unknown gametags: {', '.join(unknown_tag_names)}```Use **!list** to print available gametags."
-
-        await ctx.send(msg_str)
-
-    # TODO perhaps only display offline members if an extra parameter (such as 'all') is given
-    @commands.command(name='players', aliases=['ps'], usage='<gametag>')
-    async def list_players(self, ctx, role_name):
-        """Lists players (and their status) with given gametag.
-
-        Usage examples:
-
-        !players SFV
-        !ps BB
-        """
-
-        role = discord.utils.find(
-            lambda role: role.name.casefold() == role_name.casefold(), ctx.guild.roles)
-
-        if not role:
-            return await ctx.send(f"```Unknown gametag: {role_name}```Use **!list** to print available gametags.")
-
-        game_name = None
-        try:
-            conn = sqlite3.connect(self.db_path, isolation_level=None)
-            cursor = conn.cursor()
-
-            cursor.execute(f"""
-                SELECT games.name
-                FROM games
-                INNER JOIN game_tags ON games.id = game_tags.game_id
-                WHERE game_tags.tag_id = ?
-            """, [role.id])
-
-            row = cursor.fetchone()
-            game_name = row[0] if row else None
-        finally:
-            conn.close()
-
-        if game_name:
-            msg_str = ""
-            for player in role.members:
-                if player.status == discord.Status.offline:
-                    msg_str += f"{player.display_name} #{player.status}\n"
-                else:
-                    msg_str += f"{player.display_name} [{player.status}]\n"
-            if msg_str:
-                msg_str = (f"Players for *{game_name}*:```css\n{msg_str}```")
-            else:
-                msg_str = "ded game"
-                e = discord.utils.get(ctx.guild.emojis, name='rip')
-                if e:
-                    msg_str = f"<:{e.name}:{e.id}> {msg_str} <:{e.name}:{e.id}>"
-        else:
-            msg_str = f"```Not a gametag: {role.name}```Use **!list** to print available gametags."
-
-        await ctx.send(msg_str)
-
-    # TODO do not create discord role if id not found
-    @commands.command(name='tag', aliases=['t'], usage='<game_id> <role_name>')
-    @commands.check(is_admin)
-    async def tag_game(self, ctx, game_id: int, tag_name):
-        """Associate game with given tag. (Admin only.)
-
-        Usage example:
-        !tag 80207 ABK
-        !t 76885 SCVI
-        """
-
-        game_name = await self._import_game(ctx, game_id)
-        if not game_name:
-            return
-
-        available_tags = self.get_available_tags(ctx.guild)
-
-        # TODO maybe check if role is already used for another game?
-
-        #tag = discord.utils.get(available_tags, name=tag_name)
-        tag = discord.utils.find(
-            lambda tag: tag.name.casefold() == tag_name.casefold(), available_tags)
-
-        if tag is None:
-            msg = await ctx.send("No existing tag found by that name, creating now.")
-            try:
-                tag = await ctx.guild.create_role(
-                    name=tag_name,
-                    mentionable=True,
-                    reason=f"{ctx.author} requested role creation through {ctx.command.name}"
-                    )
-            except:
-                await msg.edit(content="Failed to create Discord role.")
-                raise
-            else:
-                await msg.edit(content="Discord role created.")
+    # TODO rethink name
+    async def add_itemtag(self, itemtag):
+        item = itemtag.item
+        tag = itemtag.tag
 
         try:
             conn = sqlite3.connect(self.db_path)
@@ -462,43 +508,108 @@ class Gametags:
                 REPLACE INTO tags (id)
                 VALUES (?)
             """, [tag.id])
-            # insert or replace into game_tags
-            cursor.execute("""
-                REPLACE INTO game_tags (tag_id, game_id)
+            # insert or replace into <item_type>_tags
+            cursor.execute(f"""
+                REPLACE INTO {item.type}_tags (tag_id, {item.type}_id)
                 VALUES (?, ?)
-            """, [tag.id, game_id])
+            """, [tag.id, item.id])
 
             conn.commit()
-            await ctx.send(f"The gametag {tag.mention} is now associated with *{game_name}*.")
         except:
             conn.rollback()
             raise
         finally:
             conn.close()
 
-    # non admin-only commands print their !help when not enough arguments are given
-    @list_games.error
-    @play_game.error
-    @drop_game.error
-    @list_players.error
-    async def missing_required_argument_error(self, ctx, error):
-        if isinstance(error, commands.MissingRequiredArgument):
-            await self.send_help(ctx)
-        raise error
+    async def find_item_by_tag(self, item_type, tag):
+        item = None
+        try:
+            conn = sqlite3.connect(self.db_path, isolation_level=None)
+            cursor = conn.cursor()
 
-    # admin-only commands print !help like regular ones but also print other errors
-    @search_IGDB.error
-    @import_game.error
-    @tag_game.error
-    async def _error(self, ctx, error):
-        if isinstance(error, commands.MissingRequiredArgument):
-            await self.send_help(ctx)
-        else:
-            await ctx.send(f"```{error}```")
-        raise error
+            cursor.execute(f"""
+                SELECT {item_type}s.id, {item_type}s.name
+                FROM {item_type}s
+                INNER JOIN {item_type}_tags ON {item_type}s.id = {item_type}_tags.{item_type}_id
+                WHERE {item_type}_tags.tag_id = ?
+            """, [tag.id])
 
-    async def send_help(self, ctx):
-        return await ctx.invoke(self.bot.get_command('help'), ctx.command.name)
+            row = cursor.fetchone()
+            if (row):
+                item = Item(item_type, row[0], row[1])
+        finally:
+            conn.close()
+        return item
 
-def setup(bot):
-    bot.add_cog(Gametags(bot))
+    async def find_any_item_by_tag(self, tag):
+        item = None
+        for item_type in ItemType:
+            item = await self.find_item_by_tag(item_type, tag)
+            if item:
+                break
+        return item
+
+    async def find_itemtags_by_tags(self, item_type, tags, *, all = False):
+        rows = []
+        try:
+            conn = sqlite3.connect(self.db_path, isolation_level=None)
+            cursor = conn.cursor()
+
+            if all:
+                cursor.execute(f"""
+                    SELECT {item_type}_tags.tag_id, {item_type}s.id, {item_type}s.name
+                    FROM {item_type}s
+                    LEFT OUTER JOIN {item_type}_tags ON {item_type}s.id = {item_type}_tags.{item_type}_id
+                    ORDER BY {item_type}s.name ASC
+                """)
+            else:
+                cursor.execute(f"""
+                    SELECT {item_type}_tags.tag_id, {item_type}s.id, {item_type}s.name
+                    FROM {item_type}s
+                    INNER JOIN {item_type}_tags ON {item_type}s.id = {item_type}_tags.{item_type}_id
+                    WHERE {item_type}_tags.tag_id IN (?{(len(tags) - 1) * ', ?'})
+                    ORDER BY {item_type}s.name ASC
+                """, [tag.id for tag in tags])
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
+
+        itemtags = []
+        if rows:
+            for tag_id, item_id, item_name in rows:
+                item = Item(item_type, item_id, item_name)
+                tag = discord.utils.get(tags, id=tag_id)
+                itemtags.append(Itemtag(item, tag))
+        return itemtags
+
+class IgdbWrapper:
+
+    def __init__(self, igdb_key):
+        self.igdb = igdb(igdb_key)
+        # might have to be careful with this, I did override ItemType.__str__ after all
+        self._igdb_handlers = {}
+        self._igdb_handlers[ItemType.game] = self.igdb.games
+        self._igdb_handlers[ItemType.platform] = self.igdb.platforms
+
+    async def find_item_by_id(self, item_type, item_id):
+        result = self._igdb_handlers[item_type]({
+            'ids': item_id
+        })
+        elem = result.body[0] if result.body else None
+        item = None
+        if elem:
+            item = Item(item_type, elem['id'], elem['name'])
+        return item
+
+    async def find_items_by_name(self, item_type, item_name):
+        print(ItemType.game)
+        print(ItemType.platform)
+
+        result = self._igdb_handlers[item_type]({
+            'search': item_name,
+            'fields': ['name', 'slug']
+        })
+        items = []
+        for elem in result.body:
+            items.append(Item(item_type, elem['id'], elem['name'], elem['slug']))
+        return items
