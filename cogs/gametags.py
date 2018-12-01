@@ -321,7 +321,7 @@ class Gametags:
             if msg_str:
                 msg_str = (f"*{item.name}* players:```css\n{msg_str}```")
             else:
-                msg_str = f"*{role_name}* is a **DEAD** {item.type}"
+                msg_str = f"*{role.name}* is a **DEAD** {item.type}"
                 e = discord.utils.get(ctx.guild.emojis, name='rip')
                 if e:
                     msg_str = f"<:{e.name}:{e.id}> {msg_str} <:{e.name}:{e.id}>"
@@ -343,8 +343,6 @@ class Gametags:
             return
 
         available_tags = self._get_available_tags(ctx.guild)
-
-        # TODO maybe check if role is already used for another game?
 
         tag = discord.utils.find(
             lambda tag: tag.name.casefold() == tag_name.casefold(), available_tags)
@@ -430,7 +428,6 @@ class ItemtagRepository:
         self.data_dir = 'data/'
         self.db_path = f'{self.data_dir}gametag.db'
 
-    # TODO rethink DB scheme
     def setup(self):
         pathlib.Path(self.data_dir).mkdir(parents=True, exist_ok=True)
         try:
@@ -494,7 +491,6 @@ class ItemtagRepository:
         finally:
             conn.close()
 
-    # TODO rethink name
     async def add_itemtag(self, itemtag):
         item = itemtag.item
         tag = itemtag.tag
