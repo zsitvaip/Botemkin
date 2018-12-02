@@ -389,8 +389,8 @@ class Gametags:
         To find the platform id use the !search_platform command.
 
         Usage example:
-        !tag 6 PC
-        !t 48 PS4
+        !tag_platform 6 PC
+        !tag_plat 48 PS4
         """
         await self._tag_item(ctx, ItemType.platform, platform_id, tag_name)
 
