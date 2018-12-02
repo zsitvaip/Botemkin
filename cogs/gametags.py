@@ -93,9 +93,10 @@ class Gametags:
     async def search_IGDB_game(self, ctx, *, game_name):
         """Search IGDB for given game name. (Admin only.)
 
-        Used to get the game id to be used with the !tag_game command.
+        Use to get the game id to be used with the !tag_game command.
 
         Usage examples:
+
         !search puyo tetris
         !s dong never die
         """
@@ -107,6 +108,8 @@ class Gametags:
         """Search IGDB for given platform name. (Admin only.)
 
         Use to get the platform id to be used with the !tag_platform command.
+
+        Usage examples:
 
         !search_plat plebstation
         !sp pc masterrace
@@ -162,6 +165,7 @@ class Gametags:
         Use with 'all' to show all games/platforms imported from IGDB including ones without tags associated with them.
 
         Usage examples:
+
         !list
         !ls all
         !l a
@@ -375,20 +379,22 @@ class Gametags:
 
         To find the game id use the !search_game command.
 
-        Usage example:
+        Usage examples:
+
         !tag 80207 ABK
         !t 76885 SCVI
         """
         await self._tag_item(ctx, ItemType.game, game_id, tag_name)
 
-    @commands.command(name='tag_platform', aliases=['tag_plat', 'tp'], usage='<game_id> <role_name>')
+    @commands.command(name='tag_platform', aliases=['tag_plat', 'tp'], usage='<platform_id> <role_name>')
     @commands.check(is_admin)
     async def tag_platform(self, ctx, platform_id: int, tag_name: str):
         """Associate platform with given tag. (Admin only.)
 
         To find the platform id use the !search_platform command.
 
-        Usage example:
+        Usage examples:
+
         !tag_platform 6 PC
         !tag_plat 48 PS4
         """
