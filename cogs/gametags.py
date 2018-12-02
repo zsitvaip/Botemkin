@@ -230,8 +230,8 @@ class Gametags:
 
         Usage examples:
 
-        !play PC
-        !p PS4 XBONE
+        !platform PC
+        !plat PS4 XBONE
         """
 
         # required because *tag_names being empty does not trigger a MissingRequiredArgument
