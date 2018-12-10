@@ -41,8 +41,10 @@ class Gametags:
         self.repository.setup()
         self.igdb_wrapper = IgdbWrapper(config.igdb_key)
 
-    async def is_admin(ctx):
-        return ctx.author.guild_permissions.administrator
+    async def is_developer(ctx):
+        dev_role = discord.utils.find(
+                lambda role: role.name.casefold() == 'botemkin developer'.casefold(), ctx.author.roles)
+        return dev_role is not None
 
     # TODO make async?
     def _get_available_tags(self, guild : discord.Guild):
@@ -89,9 +91,9 @@ class Gametags:
             raise
 
     @commands.command(name='search_game', aliases=['search', 'sg', 's'], usage='<game_name>')
-    @commands.check(is_admin)
+    @commands.check(is_developer)
     async def search_IGDB_game(self, ctx, *, game_name):
-        """Search IGDB for given game name. (Admin only.)
+        """Search IGDB for given game name. (dev-only)
 
         Use to get the game id to be used with the !tag_game command.
 
@@ -103,9 +105,9 @@ class Gametags:
         await self._search_IGDB_item(ctx, ItemType.game, game_name)
 
     @commands.command(name='search_platform', aliases=['search_plat', 'sp'], usage='<platform_name>')
-    @commands.check(is_admin)
+    @commands.check(is_developer)
     async def search_IGDB_platform(self, ctx, *, platform_name):
-        """Search IGDB for given platform name. (Admin only.)
+        """Search IGDB for given platform name. (dev-only)
 
         Use to get the platform id to be used with the !tag_platform command.
 
@@ -373,9 +375,9 @@ class Gametags:
         await ctx.send(f"The {item_type}tag {tag.mention} is now associated with *{item.name}*.")
 
     @commands.command(name='tag_game', aliases=['tag', 'tg', 't'], usage='<game_id> <role_name>')
-    @commands.check(is_admin)
+    @commands.check(is_developer)
     async def tag_game(self, ctx, game_id: int, tag_name: str):
-        """Associate game with given tag. (Admin only.)
+        """Associate game with given tag. (dev-only)
 
         To find the game id use the !search_game command.
 
@@ -387,9 +389,9 @@ class Gametags:
         await self._tag_item(ctx, ItemType.game, game_id, tag_name)
 
     @commands.command(name='tag_platform', aliases=['tag_plat', 'tp'], usage='<platform_id> <role_name>')
-    @commands.check(is_admin)
+    @commands.check(is_developer)
     async def tag_platform(self, ctx, platform_id: int, tag_name: str):
-        """Associate platform with given tag. (Admin only.)
+        """Associate platform with given tag. (dev-only)
 
         To find the platform id use the !search_platform command.
 
@@ -400,7 +402,7 @@ class Gametags:
         """
         await self._tag_item(ctx, ItemType.platform, platform_id, tag_name)
 
-    # non admin-only commands print their !help when not enough arguments are given
+    # non dev-only commands print their !help when not enough arguments are given
     @play_game.error
     @play_on_platform.error
     @drop.error
@@ -410,7 +412,7 @@ class Gametags:
             await self._send_help(ctx)
         raise error
 
-    # admin-only commands print !help like regular ones but also print other errors
+    # dev-only commands print !help like regular ones but also print other errors
     @search_IGDB_game.error
     @search_IGDB_platform.error
     @tag_game.error
