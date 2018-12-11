@@ -118,46 +118,48 @@ class Gametags:
         """
         await self._search_IGDB_item(ctx, ItemType.platform, platform_name)
 
-    async def _print_itemtags(self, item_type, available_tags):
+    async def _print_itemtags(self, item_type, tags):
+        itemtags = await self.repository.find_itemtags_by_tags(item_type, tags)
         msg_str = ""
-        itemtags = await self.repository.find_itemtags_by_tags(item_type, available_tags)
         if itemtags:
             for itemtag in itemtags:
                 msg_str += f"{itemtag.tag.name} [{itemtag.item.name}]#{itemtag.item.id}\n"
-            msg_str = f"Available {item_type}tags:```css\n{msg_str}```"
-        else:
-            msg_str = f"```There are currently no available {item_type}tags.```"
         return msg_str
 
-    async def _print_all_itemtags(self, item_type, available_tags):
+    async def _print_all_itemtags(self, item_type, tags):
+        itemtags = await self.repository.find_itemtags_by_tags(item_type, tags, all=True)
         msg_str = ""
-        itemtags = await self.repository.find_itemtags_by_tags(item_type, available_tags, all=True)
         if itemtags:
             for itemtag in itemtags:
                 itemtag_name = "\t"
                 if itemtag.tag:
                     itemtag_name = f"{itemtag.tag.name} "
                 msg_str += f"{itemtag_name}[{itemtag.item.name}]#{itemtag.item.id}\n"
-            msg_str = f"Imported {item_type}s:```css\n{msg_str}```"
-        else:
-            msg_str = f"```There are currently no imported {item_type}s.```"
         return msg_str
 
     async def _list_available_tags(self, ctx):
-        msg_str = ""
         available_tags = self._get_available_tags(ctx.guild)
+        msg_str = ""
         if available_tags:
-            msg_str += await self._print_itemtags(ItemType.game, available_tags)
-            msg_str += await self._print_itemtags(ItemType.platform, available_tags)
+            for item_type in ItemType:
+                ret_str = await self._print_itemtags(item_type, available_tags)
+                if ret_str:
+                    msg_str += f"Available {item_type}tags:```css\n{ret_str}```"
+                else:
+                    msg_str += f"```There are currently no available {item_type}tags.```"
         else:
             msg_str = f"```There are currently no available tags.```"
         await ctx.send(msg_str)
 
     async def _list_all_tags(self, ctx):
-        msg_str = ""
         available_tags = self._get_available_tags(ctx.guild)
-        msg_str += await self._print_all_itemtags(ItemType.game, available_tags)
-        msg_str += await self._print_all_itemtags(ItemType.platform, available_tags)
+        msg_str = ""
+        for item_type in ItemType:
+            ret_str = await self._print_all_itemtags(item_type, available_tags)
+            if ret_str:
+                msg_str += f"Imported {item_type}s:```css\n{ret_str}```"
+            else:
+                msg_str += f"```There are currently no imported {item_type}s.```"
         await ctx.send(msg_str)
 
     @commands.command(name='list', aliases=['ls', 'l'], usage='[all]')
