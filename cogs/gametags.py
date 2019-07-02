@@ -6,7 +6,10 @@ import sqlite3
 
 import discord
 from discord.ext import commands
-from igdb_api_python.igdb import igdb as igdb
+
+# for IGDB wrapper
+import requests
+import json
 
 from . import config
 
@@ -405,7 +408,7 @@ class Gametags:
         await self._tag_item(ctx, ItemType.platform, platform_id, tag_name)
 
     # non dev-only commands print their !help when not enough arguments are given
-    @play_game.error
+    # @play_game.error
     @play_on_platform.error
     @drop.error
     @show_players.error
@@ -591,16 +594,25 @@ class ItemtagRepository:
 class IgdbWrapper:
 
     def __init__(self, igdb_key):
-        self.igdb = igdb(igdb_key)
-        # might have to be careful with this, I did override ItemType.__str__ after all
-        self._igdb_handlers = {}
-        self._igdb_handlers[ItemType.game] = self.igdb.games
-        self._igdb_handlers[ItemType.platform] = self.igdb.platforms
+        self.__api_key = igdb_key
+        self.__api_url = "https://api-v3.igdb.com/"
 
     async def find_item_by_id(self, item_type, item_id):
-        result = self._igdb_handlers[item_type]({
-            'ids': item_id
-        })
+        url = self.__api_url + f"{item_type}s/"
+        data = f"fields id,name; where id = {item_id};"
+        headers = {
+            "user-key": self.__api_key,
+            'Accept': 'application/json',
+        }
+        result = requests.get(url, data=data, headers=headers)
+        try:
+            result.raise_for_status()
+        except:
+            print("data: " + data)
+            print("result: "+ result.text)
+            raise
+
+        result.body = json.loads(result.text)
         elem = result.body[0] if result.body else None
         item = None
         if elem:
@@ -608,13 +620,21 @@ class IgdbWrapper:
         return item
 
     async def find_items_by_name(self, item_type, item_name):
-        print(ItemType.game)
-        print(ItemType.platform)
+        url = self.__api_url + f"{item_type}s/"
+        data = f"fields id,name,slug; sort first_release_date desc; limit 20; where name ~ *\"{item_name}\"*;"
+        headers = {
+            "user-key": self.__api_key,
+            'Accept': 'application/json',
+        }
+        result = requests.get(url, data=data, headers=headers)
+        try:
+            result.raise_for_status()
+        except:
+            print("data: " + data)
+            print("result: "+ result.text)
+            raise
 
-        result = self._igdb_handlers[item_type]({
-            'search': item_name,
-            'fields': ['name', 'slug']
-        })
+        result.body = json.loads(result.text)
         items = []
         for elem in result.body:
             items.append(Item(item_type, elem['id'], elem['name'], elem['slug']))
