@@ -6,7 +6,7 @@ import random
 
 log = logging.getLogger(__name__)
 
-class Fun:
+class Fun(commands.Cog):
     """Fun module. Your mileage may vary."""
 
     def __init__(self, bot):
@@ -16,10 +16,11 @@ class Fun:
     async def buster(self, ctx):
         """Busts."""
         emojis = ctx.guild.emojis
-        e1 = discord.utils.get(emojis, name='confirmed')
+#       e1 = discord.utils.get(emojis, name='confirmed')
         e2 = discord.utils.get(emojis, name='buster')
-        if e1 and e2:
-            await ctx.message.add_reaction(e1)
+#       if e1 and e2:
+        if e2:
+#           await ctx.message.add_reaction(e1)
             msg = await ctx.send("４８の必殺技！")
             await asyncio.sleep(2)
             await msg.edit(content="ボチョムキン……！！")
@@ -43,7 +44,7 @@ class Fun:
             await ctx.send(f"{ctx.author.mention} Get a laifu!")
             log.warning("!waifu called but missing emoji")
 
-    @commands.command()
+#   @commands.command()
     async def clash(self, ctx):
         """This hardly ever happens, really."""
         if random.randint(1, 10) > 3:

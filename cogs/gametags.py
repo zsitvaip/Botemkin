@@ -35,7 +35,7 @@ Item.__new__.__defaults__ = (None,) * len(Item._fields)
 
 Itemtag = namedtuple('Itemtag', 'item tag')
 
-class Gametags:
+class Gametags(commands.Cog):
     """Module for handling self-assignable roles (aka tags)."""
 
     def __init__(self, bot):
