@@ -231,8 +231,7 @@ class Gametags(commands.Cog):
 
         # required because *tag_names being empty does not trigger a MissingRequiredArgument
         if not tag_names:
-            await self._send_help(ctx)
-            return
+            return await ctx.send_help(ctx.command)
         await self._assign_tags_by_name(ctx, ItemType.game, tag_names)
 
     @commands.command(name='platform', aliases=['plat'], usage='<platformtags>')
@@ -247,8 +246,7 @@ class Gametags(commands.Cog):
 
         # required because *tag_names being empty does not trigger a MissingRequiredArgument
         if not tag_names:
-            await self._send_help(ctx)
-            return
+            return await ctx.send_help(ctx.command)
         await self._assign_tags_by_name(ctx, ItemType.platform, tag_names)
 
     async def _remove_any_tags_by_name(self, ctx, tag_names):
@@ -299,8 +297,7 @@ class Gametags(commands.Cog):
 
         # required because *tag_names being empty does not trigger a MissingRequiredArgument
         if not tag_names:
-            await self._send_help(ctx)
-            return
+            return await ctx.send_help(ctx.command)
         await self._remove_any_tags_by_name(ctx, tag_names)
 
     # TODO perhaps only display offline members if an extra parameter (such as 'all') is given
@@ -414,7 +411,7 @@ class Gametags(commands.Cog):
     @show_players.error
     async def _missing_required_argument_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
-            await self._send_help(ctx)
+            await ctx.send_help(ctx.command)
         raise error
 
     # dev-only commands print !help like regular ones but also print other errors
@@ -424,13 +421,10 @@ class Gametags(commands.Cog):
     @tag_platform.error
     async def _verbose_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
-            await self._send_help(ctx)
+            await ctx.send_help(ctx.command)
         else:
             await ctx.send(f"```{error}```")
         raise error
-
-    async def _send_help(self, ctx):
-        return await ctx.invoke(self.bot.get_command('help'), ctx.command.name)
 
 def setup(bot):
     bot.add_cog(Gametags(bot))
