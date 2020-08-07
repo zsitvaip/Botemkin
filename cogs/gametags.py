@@ -301,16 +301,26 @@ class Gametags(commands.Cog):
         await self._remove_any_tags_by_name(ctx, tag_names)
 
     # TODO perhaps only display offline members if an extra parameter (such as 'all') is given
-    @commands.command(name='players', aliases=['ps'], usage='<tag>')
-    async def show_players(self, ctx, role_name):
-        """Shows players (and their status) with given tag.
+    @commands.command(name='players', aliases=['ps'], usage='<tags>')
+    async def show_players(self, ctx, *role_names):
+        """Shows players (and their status) with given tags. When given mutiple tags only show players who match all of them.
 
         Usage examples:
 
         !players SFV
         !ps PS4
+        !ps GG BBCF PC
         """
 
+        # required because *tag_names being empty does not trigger a MissingRequiredArgument
+        if not role_names:
+            return await ctx.send_help(ctx.command)
+        if len(role_names) > 1:
+            await self._intersect_players(ctx, role_names)
+        else:
+            await self._show_players_for_single_role(ctx, role_names[0])
+
+    async def _show_players_for_single_role(self, ctx, role_name):
         role = discord.utils.find(
             lambda role: role.name.casefold() == role_name.casefold(), ctx.guild.roles)
 
@@ -335,6 +345,32 @@ class Gametags(commands.Cog):
                     msg_str = f"<:{e.name}:{e.id}> {msg_str} <:{e.name}:{e.id}>"
         else:
             msg_str = f"```Not a tag: {role.name}```Use **!list** to print available tags."
+
+        await ctx.send(msg_str)
+
+    async def _intersect_players(self, ctx, role_names):
+        selected_tags, unknown_tag_names = self._get_selected_tags(ctx.guild, role_names)
+        if not selected_tags:
+            return await ctx.send("No matching tags found.")
+
+        valid_role_names = [role.name for role in selected_tags]
+
+        players = set(selected_tags[0].members)
+        for role in selected_tags[1:]:
+            players &= set(role.members)
+        if not players:
+            return await ctx.send(f"No players who match all of the following tags: *{'*, *'.join(valid_role_names)}*.")
+
+        msg_str = ""
+        for player in players:
+            if player.status == discord.Status.offline:
+                msg_str += f"{player.display_name} #{player.status}\n"
+            else:
+                msg_str += f"{player.display_name} [{player.status}]\n"
+
+        msg_str = f"The following tags are being matched against: *{'*, *'.join(valid_role_names)}*.```css\n{msg_str}```"
+        if unknown_tag_names:
+            msg_str += f"```Unknown tags: {', '.join(unknown_tag_names)}```Use **!list** to print available tags."
 
         await ctx.send(msg_str)
 
