@@ -6,6 +6,10 @@ import traceback
 
 import config
 
+INTENTS = discord.Intents.default()
+INTENTS.members = True
+INTENTS.presences = True
+
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
@@ -27,7 +31,7 @@ class Botemkin(commands.Bot):
     """Burly bot."""
 
     def __init__(self):
-        super().__init__(command_prefix=COMMAND_PREFIX, description=DESCRIPTION)
+        super().__init__(command_prefix=COMMAND_PREFIX, intents=INTENTS, description=DESCRIPTION)
 
         for extension in INITIAL_EXTENSIONS:
             try:
