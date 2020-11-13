@@ -337,7 +337,8 @@ class Gametags(commands.Cog):
                 else:
                     msg_str += f"{player.display_name} [{player.status}]\n"
             if msg_str:
-                msg_str = (f"*{item.name}* players:```css\n{msg_str}```")
+                num = len(role.members)
+                msg_str = (f"*{item.name}* has {num} player{'s' if num else ''}:```css\n{msg_str}```")
             else:
                 msg_str = f"*{role.name}* is a **DEAD** {item.type}"
                 e = discord.utils.get(ctx.guild.emojis, name='rip')
@@ -368,7 +369,8 @@ class Gametags(commands.Cog):
             else:
                 msg_str += f"{player.display_name} [{player.status}]\n"
 
-        msg_str = f"The following tags are being matched against: *{'*, *'.join(valid_role_names)}*.```css\n{msg_str}```"
+        num = len(players)
+        msg_str =  f"The following tags are matched by {num} player{'s' if num else ''}: *{'*, *'.join(valid_role_names)}*.```css\n{msg_str}```"
         if unknown_tag_names:
             msg_str += f"```Unknown tags: {', '.join(unknown_tag_names)}```Use **!list** to print available tags."
 
