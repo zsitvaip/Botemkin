@@ -9,7 +9,6 @@ from discord.ext import commands
 
 # for IGDB wrapper
 import requests
-import json
 
 from . import config
 
@@ -42,7 +41,7 @@ class Gametags(commands.Cog):
         self.bot = bot
         self.repository = ItemtagRepository()
         self.repository.setup()
-        self.igdb_wrapper = IgdbWrapper(config.igdb_key)
+        self.igdb_wrapper = IgdbWrapper(config.client_id, config.client_secret)
 
     async def is_developer(ctx):
         dev_role = discord.utils.find(
@@ -625,26 +624,41 @@ class ItemtagRepository:
 
 class IgdbWrapper:
 
-    def __init__(self, igdb_key):
-        self.__api_key = igdb_key
-        self.__api_url = "https://api-v3.igdb.com/"
+    def __init__(self, client_id, client_secret):
+        self.__igdb_url = "https://api.igdb.com/v4/"
+        self.__twitch_url = "https://id.twitch.tv/oauth2/token"
+        self.__client_id = client_id
+        self.__client_secret = client_secret
+        self.__access_token = None
+
+    async def __renew_access_token(self):
+        payload = {'client_id': self.__client_id, 'client_secret': self.__client_secret, 'grant_type': 'client_credentials'}
+        result = requests.post(self.__twitch_url, params=payload)
+        result.raise_for_status()
+        self.__access_token = result.json()['access_token']
+
+    async def __post_request(self, url, data):
+        for i in range(2):
+            headers = {
+                'Client-ID': self.__client_id,
+                'Authorization': f"Bearer {self.__access_token}",
+                'Accept': 'application/json',
+            }
+            try:
+                result = requests.post(url, data=data, headers=headers)
+                result.raise_for_status()
+            except requests.exceptions.HTTPError as err:
+                if result.json()['Message'] == 'User is not authorized to access this resource with an explicit deny':
+                    await self.__renew_access_token()
+                    continue
+        return result
 
     async def find_item_by_id(self, item_type, item_id):
-        url = self.__api_url + f"{item_type}s/"
+        url = self.__igdb_url + f"{item_type}s/"
         data = f"fields id,name; where id = {item_id};"
-        headers = {
-            "user-key": self.__api_key,
-            'Accept': 'application/json',
-        }
-        result = requests.get(url, data=data, headers=headers)
-        try:
-            result.raise_for_status()
-        except:
-            print("data: " + data)
-            print("result: "+ result.text)
-            raise
 
-        result.body = json.loads(result.text)
+        result = await self.__post_request(url, data)
+        result.body = result.json()
         elem = result.body[0] if result.body else None
         item = None
         if elem:
@@ -652,22 +666,11 @@ class IgdbWrapper:
         return item
 
     async def find_items_by_name(self, item_type, item_name):
-        url = self.__api_url + f"{item_type}s/"
+        url = self.__igdb_url + f"{item_type}s/"
         data = f"fields id,name,slug; sort first_release_date desc; limit 20; where name ~ *\"{item_name}\"*;"
-        headers = {
-            "user-key": self.__api_key,
-            'Accept': 'application/json',
-        }
-        result = requests.get(url, data=data, headers=headers)
-        try:
-            result.raise_for_status()
-        except:
-            print("data: " + data)
-            print("result: "+ result.text)
-            raise
 
-        result.body = json.loads(result.text)
+        result = await self.__post_request(url, data)
         items = []
-        for elem in result.body:
+        for elem in result.json():
             items.append(Item(item_type, elem['id'], elem['name'], elem['slug']))
         return items
