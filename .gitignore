@@ -1,4 +1,5 @@
-data/*
+venv/
+data/
 *.pyc
 *.log
 config.py

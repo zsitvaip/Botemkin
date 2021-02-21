@@ -1,2 +1,2 @@
-git+https://github.com/Rapptz/discord.py@rewrite
-igdb_api_python
+requests==2.25.1
+discord==1.0.1
