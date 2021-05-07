@@ -632,6 +632,7 @@ class IgdbWrapper:
         self.__access_token = None
 
     async def __renew_access_token(self):
+        log.info('Renewing IGDB access token')
         payload = {'client_id': self.__client_id, 'client_secret': self.__client_secret, 'grant_type': 'client_credentials'}
         result = requests.post(self.__twitch_url, params=payload)
         result.raise_for_status()
@@ -648,9 +649,11 @@ class IgdbWrapper:
                 result = requests.post(url, data=data, headers=headers)
                 result.raise_for_status()
             except requests.exceptions.HTTPError as err:
-                if result.json()['Message'] == 'User is not authorized to access this resource with an explicit deny':
+                if err.response.status_code == 401:
+                    log.info(err)
                     await self.__renew_access_token()
                     continue
+                log.error(err)
         return result
 
     async def find_item_by_id(self, item_type, item_id):
