@@ -13,9 +13,6 @@ INTENTS.presences = True
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-KOZLEMENYEK='kozlemenyek'
-BOTEMKIN_PLS='botemkin_pls'
-
 COMMAND_PREFIX = '!'
 DESCRIPTION = """
 Pot but bot.
@@ -59,18 +56,13 @@ class Botemkin(commands.Bot):
 
     async def on_member_join(self, member):
         channels = member.guild.channels
-        kozlemenyek = discord.utils.get(channels, name=KOZLEMENYEK)
-        botemkin_pls = discord.utils.get(channels, name=BOTEMKIN_PLS)
-        if kozlemenyek and botemkin_pls:
-            welcome_str = f"""
-{member.mention} Üdvözlünk a MAVIK discord szerverén! \
-A szabályzatot a {kozlemenyek.mention} channelben találod, érdemes átolvasni. \
-A {botemkin_pls.mention} channelben tudsz tageket kérni, hogy más is lássa mivel játszol. \
-A **!help** paranccsal tudsz segítséget kérni a Botemkin használathoz. gl hf!
-"""
-            await botemkin_pls.send(welcome_str)
-        else:
-            log.error("could not find channel(s) for welcome message")
+        announcements = discord.utils.get(channels, name=config.announcements_channel)
+        home = discord.utils.get(channels, name=config.home_channel)
+        welcome_msg=config.welcome_text.format(
+            new_member=member.mention,
+            announcements=announcements.mention,
+            home=home.mention)
+        await home.send(welcome_msg)
 
 bot = Botemkin()
 bot.run()
