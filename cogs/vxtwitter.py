@@ -46,7 +46,7 @@ class Vxtwitter(commands.Cog):
             # temporarily couldn't fetch ref, user should retry later
             return
         try:
-            if ref.author != payload.user_id and payload.member.permissions_in(channel).manage_messages:
+            if ref.author != payload.user_id and not payload.member.permissions_in(channel).manage_messages:
                 return
             await ref.edit(suppress=False)
         except AttributeError:
