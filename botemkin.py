@@ -22,6 +22,7 @@ Mainly for handing out self-assignable roles (aka tags).
 INITIAL_EXTENSIONS = (
     'cogs.gametags',
     'cogs.fun',
+    'cogs.vxtwitter',
 )
 
 class Botemkin(commands.Bot):
