@@ -63,5 +63,10 @@ class Fun(commands.Cog):
         else:
             log.warning("!clash called but missing emoji")
 
+    @commands.command()
+    async def clown(self, ctx):
+        """Honk Honk"""
+        await ctx.send('https://cdn.discordapp.com/attachments/706976180703854705/1005032221402484736/Akkor_bohoc.mp4')
+
 def setup(bot):
     bot.add_cog(Fun(bot))
