@@ -39,6 +39,7 @@ class Botemkin(commands.Bot):
             except Exception as e:
                 log.error(f"Failed to load extension: {str(e)}")
                 traceback.print_exc()
+        await bot.tree.sync()
 
     async def on_ready(self):
         log.info(f"logged in as {self.user} with an id of {self.user.id}")
