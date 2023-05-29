@@ -633,7 +633,7 @@ class IgdbWrapper:
 
     async def __renew_access_token(self):
         log.info('Renewing IGDB access token')
-        payload = {'IGDB_CLIENT_ID': self.__IGDB_CLIENT_ID, 'IGDB_CLIENT_SECRET': self.__IGDB_CLIENT_SECRET, 'grant_type': 'client_credentials'}
+        payload = {'client_id': self.__IGDB_CLIENT_ID, 'client_secret': self.__IGDB_CLIENT_SECRET, 'grant_type': 'client_credentials'}
         result = requests.post(self.__twitch_url, params=payload)
         result.raise_for_status()
         self.__access_token = result.json()['access_token']
