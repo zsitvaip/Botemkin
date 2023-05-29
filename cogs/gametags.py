@@ -23,9 +23,9 @@ class ItemType(Enum):
 
     # TODO really this should be a lookup in a list/dict
     def pre(self):
-        if self.value is 1:
+        if self.value == 1:
             return ''
-        if self.value is 2:
+        if self.value == 2:
             return 'on '
 
 # TODO python 3.7: consider changing these to dataclasses, setting defaults is also simpler
@@ -41,7 +41,7 @@ class Gametags(commands.Cog):
         self.bot = bot
         self.repository = ItemtagRepository()
         self.repository.setup()
-        self.igdb_wrapper = IgdbWrapper(config.client_id, config.client_secret)
+        self.igdb_wrapper = IgdbWrapper(config.IGDB_CLIENT_ID, config.IGDB_CLIENT_SECRET)
 
     async def is_developer(ctx):
         dev_role = discord.utils.find(
@@ -463,8 +463,8 @@ class Gametags(commands.Cog):
             await ctx.send(f"```{error}```")
         raise error
 
-def setup(bot):
-    bot.add_cog(Gametags(bot))
+async def setup(bot):
+    await bot.add_cog(Gametags(bot))
 
 class ItemtagRepository:
 
@@ -624,16 +624,16 @@ class ItemtagRepository:
 
 class IgdbWrapper:
 
-    def __init__(self, client_id, client_secret):
+    def __init__(self, IGDB_CLIENT_ID, IGDB_CLIENT_SECRET):
         self.__igdb_url = "https://api.igdb.com/v4/"
         self.__twitch_url = "https://id.twitch.tv/oauth2/token"
-        self.__client_id = client_id
-        self.__client_secret = client_secret
+        self.__IGDB_CLIENT_ID = IGDB_CLIENT_ID
+        self.__IGDB_CLIENT_SECRET = IGDB_CLIENT_SECRET
         self.__access_token = None
 
     async def __renew_access_token(self):
         log.info('Renewing IGDB access token')
-        payload = {'client_id': self.__client_id, 'client_secret': self.__client_secret, 'grant_type': 'client_credentials'}
+        payload = {'IGDB_CLIENT_ID': self.__IGDB_CLIENT_ID, 'IGDB_CLIENT_SECRET': self.__IGDB_CLIENT_SECRET, 'grant_type': 'client_credentials'}
         result = requests.post(self.__twitch_url, params=payload)
         result.raise_for_status()
         self.__access_token = result.json()['access_token']
@@ -641,7 +641,7 @@ class IgdbWrapper:
     async def __post_request(self, url, data):
         for i in range(2):
             headers = {
-                'Client-ID': self.__client_id,
+                'Client-ID': self.__IGDB_CLIENT_ID,
                 'Authorization': f"Bearer {self.__access_token}",
                 'Accept': 'application/json',
             }

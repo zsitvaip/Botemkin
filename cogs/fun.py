@@ -68,5 +68,5 @@ class Fun(commands.Cog):
         """Honk Honk"""
         await ctx.send('https://cdn.discordapp.com/attachments/706976180703854705/1005032221402484736/Akkor_bohoc.mp4')
 
-def setup(bot):
-    bot.add_cog(Fun(bot))
+async def setup(bot):
+    await bot.add_cog(Fun(bot))

@@ -56,5 +56,5 @@ class Vxtwitter(commands.Cog):
             log.exception(e)
         await msg.delete()
 
-def setup(bot):
-    bot.add_cog(Vxtwitter(bot))
+async def setup(bot):
+    await bot.add_cog(Vxtwitter(bot))
