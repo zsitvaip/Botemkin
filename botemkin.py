@@ -40,9 +40,6 @@ class Botemkin(commands.Bot):
                 log.error(f"Failed to load extension: {str(e)}")
                 traceback.print_exc()
 
-    def run(self):
-        super().run(config.token, reconnect=True)
-
     async def on_ready(self):
         log.info(f"logged in as {self.user} with an id of {self.user.id}")
 
