@@ -21,14 +21,20 @@ class Fun(commands.Cog):
         self.bot = bot
         
         # https://github.com/Rapptz/discord.py/issues/7823
-        self.ctx_menu = app_commands.ContextMenu(
+        self.translate_name_ctx_menu = app_commands.ContextMenu(
             name='Translate Name',
-            callback=self.translate_name_context_menu,
+            callback=self.translate_name,
         )
-        self.bot.tree.add_command(self.ctx_menu)
+        self.translate_msg_ctx_menu = app_commands.ContextMenu(
+            name='Translate Message',
+            callback=self.translate_message,
+        )
+        self.bot.tree.add_command(self.translate_name_ctx_menu)
+        self.bot.tree.add_command(self.translate_msg_ctx_menu)
 
     async def cog_unload(self) -> None:
-        self.bot.tree.remove_command(self.ctx_menu.name, type=self.ctx_menu.type)
+        self.bot.tree.remove_command(self.translate_name_ctx_menu.name, type=self.translate_name_ctx_menu.type)
+        self.bot.tree.remove_command(self.translate_msg_ctx_menu.name, type=self.translate_msg_ctx_menu.type)
 
     @commands.command()
     async def buster(self, ctx):
@@ -86,15 +92,20 @@ class Fun(commands.Cog):
         """Honk Honk"""
         await ctx.send('https://cdn.discordapp.com/attachments/706976180703854705/1005032221402484736/Akkor_bohoc.mp4')
 
-    async def translate_name_context_menu(self, interaction: discord.Interaction, message: discord.Message) -> None:
+    async def translate_name(self, interaction: discord.Interaction, message: discord.Message) -> None:
+        await self.create_embed_with_translation(interaction, message.author.display_name)
+
+    async def translate_message(self, interaction: discord.Interaction, message: discord.Message) -> None:
+        await self.create_embed_with_translation(interaction, message.content)
+    
+    async def create_embed_with_translation(self, interaction: discord.Interaction, text: str) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
 
-        display_name = message.author.display_name
-        embed = discord.Embed(title=display_name,)
+        embed = discord.Embed(title=text)
         source_language_code = 'auto'
         target_languages = ['english', 'hungarian', 'japanese']
         try:
-            detection = single_detection(text=display_name, api_key=config.DETECT_LANGUAGE_API_KEY, detailed=True)
+            detection = single_detection(text=text, api_key=config.DETECT_LANGUAGE_API_KEY, detailed=True)
             source_language = GOOGLE_CODES_TO_LANGUAGES[detection['language']]
             source_language_code = detection['language']
             if source_language in target_languages:
@@ -103,11 +114,11 @@ class Fun(commands.Cog):
         except:
             log.exception("Language detection failed")
 
-        embed.url = f"https://translate.google.com/?sl={source_language_code}&text={requests.utils.quote(display_name)}"
+        embed.url = f"https://translate.google.com/?sl={source_language_code}&text={requests.utils.quote(text)}"
 
         for lang in target_languages:
             try:
-                translation = GoogleTranslator(source='auto', target=lang).translate(display_name)
+                translation = GoogleTranslator(source='auto', target=lang).translate(text)
                 embed.add_field(name=lang.capitalize(), value=translation, inline=False)
             except:
                 log.exception("Failed to query Google Translate")
