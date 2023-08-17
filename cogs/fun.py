@@ -122,7 +122,11 @@ class Fun(commands.Cog):
                 embed.add_field(name=lang.capitalize(), value=translation, inline=False)
             except:
                 log.exception("Failed to query Google Translate")
-        await interaction.followup.send(embed=embed)
+        try:
+            await interaction.followup.send(embed=embed)
+        except:
+            # FIXME embed has constraints (such as character limit in title field) which can cause exceptions
+            await interaction.followup.send("Oops, something went wrong.")
 
 async def setup(bot):
     await bot.add_cog(Fun(bot))
