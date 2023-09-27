@@ -10,9 +10,20 @@ from discord.ext import commands
 # for IGDB wrapper
 import requests
 
-from . import config
+import config as config
+from . import config as cog_config
 
 log = logging.getLogger(__name__)
+
+def superuser_only():
+    async def predicate(ctx):
+        SUPERUSER_ROLE = discord.utils.find(
+            lambda role: role.name.casefold() == config.SUPERUSER_ROLE.casefold(), ctx.author.roles)
+        if SUPERUSER_ROLE is None:
+            await ctx.send('https://tenor.com/view/hal9000-hal-2001-a-space-odyssey-2001a-space-odyssey-gif-21408319')
+            raise commands.CheckFailure(f"This command is only available to {config.SUPERUSER_ROLE} role.")
+        return True
+    return commands.check(predicate)
 
 class ItemType(Enum):
     game = 1
@@ -41,7 +52,7 @@ class Gametags(commands.Cog):
         self.bot = bot
         self.repository = ItemtagRepository()
         self.repository.setup()
-        self.igdb_wrapper = IgdbWrapper(config.IGDB_CLIENT_ID, config.IGDB_CLIENT_SECRET)
+        self.igdb_wrapper = IgdbWrapper(cog_config.IGDB_CLIENT_ID, cog_config.IGDB_CLIENT_SECRET)
 
     async def is_developer(ctx):
         dev_role = discord.utils.find(
@@ -93,7 +104,7 @@ class Gametags(commands.Cog):
             raise
 
     @commands.command(name='search_game', aliases=['search', 'sg', 's'], usage='<game_name>')
-    @commands.check(is_developer)
+    @superuser_only()
     async def search_IGDB_game(self, ctx, *, game_name):
         """Search IGDB for given game name. (dev-only)
 
@@ -107,7 +118,7 @@ class Gametags(commands.Cog):
         await self._search_IGDB_item(ctx, ItemType.game, game_name)
 
     @commands.command(name='search_platform', aliases=['search_plat', 'sp'], usage='<platform_name>')
-    @commands.check(is_developer)
+    @superuser_only()
     async def search_IGDB_platform(self, ctx, *, platform_name):
         """Search IGDB for given platform name. (dev-only)
 
@@ -414,7 +425,7 @@ class Gametags(commands.Cog):
         await ctx.send(f"The {item_type}tag {tag.mention} is now associated with *{item.name}*.")
 
     @commands.command(name='tag_game', aliases=['tag', 'tg', 't'], usage='<game_id> <role_name>')
-    @commands.check(is_developer)
+    @superuser_only()
     async def tag_game(self, ctx, game_id: int, tag_name: str):
         """Associate game with given tag. (dev-only)
 
@@ -428,7 +439,7 @@ class Gametags(commands.Cog):
         await self._tag_item(ctx, ItemType.game, game_id, tag_name)
 
     @commands.command(name='tag_platform', aliases=['tag_plat', 'tp'], usage='<platform_id> <role_name>')
-    @commands.check(is_developer)
+    @superuser_only()
     async def tag_platform(self, ctx, platform_id: int, tag_name: str):
         """Associate platform with given tag. (dev-only)
 

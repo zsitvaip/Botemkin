@@ -8,7 +8,7 @@ from deep_translator.constants import GOOGLE_LANGUAGES_TO_CODES
 from deep_translator import single_detection, GoogleTranslator
 import requests
 
-from . import config
+from . import config as cog_config
 
 log = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ class Fun(commands.Cog):
         source_language_code = 'auto'
         target_languages = ['english', 'hungarian', 'japanese']
         try:
-            detection = single_detection(text=text, api_key=config.DETECT_LANGUAGE_API_KEY, detailed=True)
+            detection = single_detection(text=text, api_key=cog_config.DETECT_LANGUAGE_API_KEY, detailed=True)
             source_language = GOOGLE_CODES_TO_LANGUAGES[detection['language']]
             source_language_code = detection['language']
             if source_language in target_languages:
