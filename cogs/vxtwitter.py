@@ -45,15 +45,15 @@ class Vxtwitter(commands.Cog):
         if not ref:
             # temporarily couldn't fetch ref, user should retry later
             return
-        try:
-            if ref.author.id != payload.user_id and not payload.member.permissions_in(channel).manage_messages:
+        if not isinstance(ref, discord.DeletedReferencedMessage):
+            if ref.author.id != payload.user_id and not payload.member.guild_permissions.manage_messages:
                 return
-            await ref.edit(suppress=False)
-        except AttributeError:
-            # if ref got deleted we get discord.DeletedReferencedMessage which has no author field
-            pass
-        except discord.HTTPException as e:
-            log.exception(e)
+            try:
+                await ref.edit(suppress=False)
+            except discord.HTTPException as e:
+                log.exception(e)
+                return
+        # if the original messages was deleted anyone can revert
         await msg.delete()
 
 async def setup(bot):

@@ -20,7 +20,6 @@ def superuser_only():
         SUPERUSER_ROLE = discord.utils.find(
             lambda role: role.name.casefold() == config.SUPERUSER_ROLE.casefold(), ctx.author.roles)
         if SUPERUSER_ROLE is None:
-            await ctx.send('https://tenor.com/view/hal9000-hal-2001-a-space-odyssey-2001a-space-odyssey-gif-21408319')
             raise commands.CheckFailure(f"This command is only available to {config.SUPERUSER_ROLE} role.")
         return True
     return commands.check(predicate)
@@ -106,7 +105,7 @@ class Gametags(commands.Cog):
     @commands.command(name='search_game', aliases=['search', 'sg', 's'], usage='<game_name>')
     @superuser_only()
     async def search_IGDB_game(self, ctx, *, game_name):
-        """Search IGDB for given game name. (dev-only)
+        """Search IGDB for given game name. (superuser-only)
 
         Use to get the game id to be used with the !tag_game command.
 
@@ -120,7 +119,7 @@ class Gametags(commands.Cog):
     @commands.command(name='search_platform', aliases=['search_plat', 'sp'], usage='<platform_name>')
     @superuser_only()
     async def search_IGDB_platform(self, ctx, *, platform_name):
-        """Search IGDB for given platform name. (dev-only)
+        """Search IGDB for given platform name. (superuser-only)
 
         Use to get the platform id to be used with the !tag_platform command.
 
@@ -427,7 +426,7 @@ class Gametags(commands.Cog):
     @commands.command(name='tag_game', aliases=['tag', 'tg', 't'], usage='<game_id> <role_name>')
     @superuser_only()
     async def tag_game(self, ctx, game_id: int, tag_name: str):
-        """Associate game with given tag. (dev-only)
+        """Associate game with given tag. (superuser-only)
 
         To find the game id use the !search_game command.
 
@@ -441,7 +440,7 @@ class Gametags(commands.Cog):
     @commands.command(name='tag_platform', aliases=['tag_plat', 'tp'], usage='<platform_id> <role_name>')
     @superuser_only()
     async def tag_platform(self, ctx, platform_id: int, tag_name: str):
-        """Associate platform with given tag. (dev-only)
+        """Associate platform with given tag. (superuser-only)
 
         To find the platform id use the !search_platform command.
 
@@ -452,7 +451,7 @@ class Gametags(commands.Cog):
         """
         await self._tag_item(ctx, ItemType.platform, platform_id, tag_name)
 
-    # non dev-only commands print their !help when not enough arguments are given
+    # non superuser-only commands print their !help when not enough arguments are given
     # @play_game.error
     @play_on_platform.error
     @drop.error
@@ -462,7 +461,7 @@ class Gametags(commands.Cog):
             await ctx.send_help(ctx.command)
         raise error
 
-    # dev-only commands print !help like regular ones but also print other errors
+    # superuser-only commands print !help like regular ones but also print other errors
     @search_IGDB_game.error
     @search_IGDB_platform.error
     @tag_game.error
