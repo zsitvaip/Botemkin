@@ -17,13 +17,13 @@ class Vxtwitter(commands.Cog):
         if message.author.bot or message.type is not discord.MessageType.default:
             return
         # NOTE this pattern is a bit more forgiving than Discord's
-        pattern = re.compile(r'https://(mobile.|vx)?twitter.com/([\w]{4,15}/status/[0-9]+)')
+        pattern = re.compile(r'https://(mobile.|vx)?(twitter|x).com/([\w]{4,15}/status/[0-9]+)')
         matches = pattern.finditer(message.content)
         prefixes = set()
-        links = dict()  # to make matches unique and ordered
+        links = dict()  # wanted to use ordered set but apparently this is the closest thing
         for m in matches:
             prefixes.add(m.group(1))
-            links[f"https://vxtwitter.com/{m.group(2)}"] = None
+            links[f"https://vxtwitter.com/{m.group(3)}"] = None
         if not links or prefixes == {"vx"}:
             # if there are no matches (or it's all vxtwitter links) then our work here is done
             return
