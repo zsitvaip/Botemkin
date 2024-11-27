@@ -130,49 +130,51 @@ class Gametags(commands.Cog):
         """
         await self._search_IGDB_item(ctx, ItemType.platform, platform_name)
 
-    async def _print_itemtags(self, item_type, tags):
+    async def _get_paginator_for_available_itemtags(self, item_type, tags):
         itemtags = await self.repository.find_itemtags_by_tags(item_type, tags)
-        msg_str = ""
         if itemtags:
+            paginator = commands.Paginator(prefix='```css', suffix='```', linesep='\n')
+            paginator.add_line(f"Available {item_type}tags:", empty=True)
             for itemtag in itemtags:
-                msg_str += f"{itemtag.tag.name} [{itemtag.item.name}]#{itemtag.item.id}\n"
-        return msg_str
-
-    async def _print_all_itemtags(self, item_type, tags):
+                paginator.add_line(f"{itemtag.tag.name} [{itemtag.item.name}]#{itemtag.item.id}")
+            return paginator
+        return None
+    
+    async def _get_paginator_for_all_itemtags(self, item_type, tags):
         itemtags = await self.repository.find_itemtags_by_tags(item_type, tags, all=True)
-        msg_str = ""
         if itemtags:
+            paginator = commands.Paginator(prefix='```css', suffix='```', linesep='\n')
+            paginator.add_line(f"Imported {item_type}s:", empty=True)
             for itemtag in itemtags:
                 itemtag_name = "\t"
                 if itemtag.tag:
                     itemtag_name = f"{itemtag.tag.name} "
-                msg_str += f"{itemtag_name}[{itemtag.item.name}]#{itemtag.item.id}\n"
-        return msg_str
+                paginator.add_line(f"{itemtag_name}[{itemtag.item.name}]#{itemtag.item.id}")
+            return paginator
+        return None
 
     async def _list_available_tags(self, ctx):
         available_tags = self._get_available_tags(ctx.guild)
-        msg_str = ""
         if available_tags:
             for item_type in ItemType:
-                ret_str = await self._print_itemtags(item_type, available_tags)
-                if ret_str:
-                    msg_str += f"Available {item_type}tags:```css\n{ret_str}```"
+                paginator = await self._get_paginator_for_available_itemtags(item_type, available_tags)
+                if paginator:
+                    for page in paginator.pages:
+                        await ctx.send(page)
                 else:
-                    msg_str += f"```There are currently no available {item_type}tags.```"
+                    await ctx.send(f"```There are currently no available {item_type}tags.```")
         else:
-            msg_str = f"```There are currently no available tags.```"
-        await ctx.send(msg_str)
+            await ctx.send(f"```There are currently no available tags.```")
 
     async def _list_all_tags(self, ctx):
         available_tags = self._get_available_tags(ctx.guild)
-        msg_str = ""
         for item_type in ItemType:
-            ret_str = await self._print_all_itemtags(item_type, available_tags)
-            if ret_str:
-                msg_str += f"Imported {item_type}s:```css\n{ret_str}```"
+            paginator = await self._get_paginator_for_all_itemtags(item_type, available_tags)
+            if paginator:
+                for page in paginator.pages:
+                    await ctx.send(page)
             else:
-                msg_str += f"```There are currently no imported {item_type}s.```"
-        await ctx.send(msg_str)
+                await ctx.send(f"```There are currently no imported {item_type}s.```")
 
     @commands.command(name='list', aliases=['ls', 'l'], usage='[all]')
     async def list_available_tags(self, ctx, arg=None):
@@ -312,7 +314,7 @@ class Gametags(commands.Cog):
     # TODO perhaps only display offline members if an extra parameter (such as 'all') is given
     @commands.command(name='players', aliases=['ps'], usage='<tags>')
     async def show_players(self, ctx, *role_names):
-        """Shows players (and their status) with given tags. When given mutiple tags only show players who match all of them.
+        """Shows players with given tags. When given multiple tags only show players who match all of them.
 
         Usage examples:
 
@@ -337,26 +339,25 @@ class Gametags(commands.Cog):
             await ctx.send(f"```Unknown tag: {role_name}```Use **!list** to print available tags.")
             return
 
+        paginator = commands.Paginator(prefix='', suffix='', linesep='\n')
         item = await self.repository.find_any_item_by_tag(role)
         if item:
-            msg_str = ""
-            for player in role.members:
-                if player.status == discord.Status.offline:
-                    msg_str += f"{player.display_name} #{player.status}\n"
-                else:
-                    msg_str += f"{player.display_name} [{player.status}]\n"
-            if msg_str:
-                num = len(role.members)
-                msg_str = (f"*{item.name}* has {num} player{'s' if num != 1 else ''}:```css\n{msg_str}```")
+            num = len(role.members)
+            if num > 0:
+                paginator.add_line(f"*{item.name}* has {num} player{'s' if num != 1 else ''}:")
+                for player in role.members:
+                    paginator.add_line(f"{player.mention} ({discord.utils.escape_markdown(player.name)})")
             else:
                 msg_str = f"*{role.name}* is a **DEAD** {item.type}"
                 e = discord.utils.get(ctx.guild.emojis, name='rip')
                 if e:
                     msg_str = f"<:{e.name}:{e.id}> {msg_str} <:{e.name}:{e.id}>"
+                paginator.add_line(msg_str)
         else:
-            msg_str = f"```Not a tag: {role.name}```Use **!list** to print available tags."
+            paginator.add_line(f"```Not a tag: {role.name}```Use **!list** to print available tags.")
 
-        await ctx.send(msg_str)
+        for page in paginator.pages:
+            await ctx.send(page, allowed_mentions = discord.AllowedMentions.none())
 
     async def _intersect_players(self, ctx, role_names):
         selected_tags, unknown_tag_names = self._get_selected_tags(ctx.guild, role_names)
@@ -373,17 +374,14 @@ class Gametags(commands.Cog):
 
         msg_str = ""
         for player in players:
-            if player.status == discord.Status.offline:
-                msg_str += f"{player.display_name} #{player.status}\n"
-            else:
-                msg_str += f"{player.display_name} [{player.status}]\n"
+            msg_str += f"{player.mention} ({discord.utils.escape_markdown(player.name)})\n"
 
         num = len(players)
-        msg_str =  f"The following tags are matched by {num} player{'s' if num != 1 else ''}: *{'*, *'.join(valid_role_names)}*.```css\n{msg_str}```"
+        msg_str =  f"The following tags are matched by {num} player{'s' if num != 1 else ''}: *{'*, *'.join(valid_role_names)}*.\n{msg_str}"
         if unknown_tag_names:
             msg_str += f"```Unknown tags: {', '.join(unknown_tag_names)}```Use **!list** to print available tags."
 
-        await ctx.send(msg_str)
+        await ctx.send(msg_str, allowed_mentions = discord.AllowedMentions.none())
 
     async def _tag_item(self, ctx, item_type, item_id, tag_name):
         item = await self.igdb_wrapper.find_item_by_id(item_type, item_id)
