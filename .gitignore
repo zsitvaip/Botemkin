@@ -3,4 +3,6 @@ data/
 *.pyc
 *.log
 config.py
+cogs_config.py
 launch.json
+/.vs

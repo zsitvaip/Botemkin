@@ -11,7 +11,7 @@ from discord.ext import commands
 import requests
 
 import config as config
-from . import config as cog_config
+from . import cogs_config as cog_config
 
 log = logging.getLogger(__name__)
 
@@ -331,6 +331,56 @@ class Gametags(commands.Cog):
         else:
             await self._show_players_for_single_role(ctx, role_names[0])
 
+    @commands.command(name='prune_tag', aliases=['prune'], usage='<tag>')
+    @superuser_only()
+    async def prune_unused_tag(self, ctx, tag):
+        role = discord.utils.find(
+            lambda role: role.name.casefold() == tag.casefold(), ctx.guild.roles)
+
+        if not role:
+            await ctx.send(f"```Unknown tag: {tag}```Use **!list** to print available tags.")
+            return
+
+        item = await self.repository.find_any_item_by_tag(role)
+        if item:
+            num = len(role.members)
+            if num > 0:
+                await ctx.send(f"⚠ Tag *{role.name}* has {num} users associated with it.")
+            elif num == 0:
+                confirmation_message = await ctx.send(f"Tag '{tag}' confirmed to have 0 users. React with a thumbs-up 👍 to this message to confirm deletion.")
+                def check(reaction, user):
+                    return user == ctx.author and str(reaction.emoji) == '👍' and reaction.message.id == confirmation_message.id
+                reaction = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
+
+                if reaction:
+                    await ctx.send(f"Deleting tag '{tag}' ...")
+        else:
+            await ctx.send(f"```Unknown tag: {role.name}```Use **!list** to print available tags.")
+
+    @commands.command(name='prune_all')
+    @superuser_only()
+    async def prune_all_unused_tags(self, ctx):
+        tags = await self.repository.get_all_tags()
+        unused_roles = []
+        if tags:
+            for tag in tags:
+                role = discord.utils.find(lambda role: role.id == tag[0], ctx.guild.roles)
+                if len(role.members) == 0:
+                    unused_roles.append(role)
+        else:
+            await ctx.send(f"⚠ Repository is empty.")
+            return
+
+        await ctx.send(f"The following roles are unused: {[role.name for role in unused_roles]}")
+        confirmation_message = await ctx.send(f"React with a thumbs-up 👍 to this message to confirm the deletion of all these roles & tags.")
+        def check(reaction, user):
+            return user == ctx.author and str(reaction.emoji) == '👍' and reaction.message.id == confirmation_message.id
+        reaction = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
+        if reaction:
+            await ctx.send(f"Deleting tags ...")
+            # TODO add deletion to repo handler
+            # TODO add dc role deletion
+
     async def _show_players_for_single_role(self, ctx, role_name):
         role = discord.utils.find(
             lambda role: role.name.casefold() == role_name.casefold(), ctx.guild.roles)
@@ -629,6 +679,17 @@ class ItemtagRepository:
                 tag = discord.utils.get(tags, id=tag_id)
                 itemtags.append(Itemtag(item, tag))
         return itemtags
+
+    async def get_all_tags(self):
+        tags = []
+        try:
+            conn = sqlite3.connect(self.db_path, isolation_level=None)
+            cursor = conn.cursor()
+            cursor.execute(f"""SELECT id FROM tags""")
+            tags = cursor.fetchall()
+        finally:
+            conn.close()
+            return tags
 
 class IgdbWrapper:
 
