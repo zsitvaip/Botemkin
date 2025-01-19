@@ -3,7 +3,10 @@ from enum import Enum
 import logging
 import pathlib
 import sqlite3
-import csv
+
+if __debug__:
+    import shutil
+    from . import debug_config
 
 import discord
 from discord.ext import commands
@@ -11,8 +14,8 @@ from discord.ext import commands
 # for IGDB wrapper
 import requests
 
-import config as config
-from . import cogs_config as cog_config
+import config
+from . import cogs_config
 
 log = logging.getLogger(__name__)
 
@@ -50,18 +53,24 @@ class Gametags(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.repository = ItemtagRepository(self.bot.debug)
+        self.repository = ItemtagRepository()
         self.repository.setup()
-        self.igdb_wrapper = IgdbWrapper(cog_config.IGDB_CLIENT_ID, cog_config.IGDB_CLIENT_SECRET)
-        if self.bot.debug:
-            # TODO setup debug roles
-            pass
+        self.igdb_wrapper = IgdbWrapper(cogs_config.IGDB_CLIENT_ID, cogs_config.IGDB_CLIENT_SECRET)
 
     # don't commit
     async def is_developer(ctx):
         dev_role = discord.utils.find(
                 lambda role: role.name.casefold() == 'botemkin developer'.casefold(), ctx.author.roles)
         return dev_role is not None
+
+    @commands.Cog.listener() 
+    async def on_ready(self):
+        # on_ready because when cog_load is raised, bot.guilds is empty
+        # BUG for some god forsaken reason this creates duplicate roles
+        if __debug__:
+            debug_guild = discord.utils.find(lambda guild: debug_config.DEBUG_GUILD_ID == guild.id, self.bot.guilds)
+            for role in debug_config.DEBUG_ROLES:
+                await debug_guild.create_role(name=role, mentionable=True, reason="Role for debugging purposes.")
 
     # TODO make async?
     def _get_available_tags(self, guild : discord.Guild):
@@ -171,6 +180,8 @@ class Gametags(commands.Cog):
         else:
             await ctx.send("```There are currently no available tags.```")
 
+    # TODO what's the use-case for unused tags without roles?
+    # why is it returning stuff that ive deleted anyway
     async def _list_all_tags(self, ctx):
         available_tags = self._get_available_tags(ctx.guild)
         for item_type in ItemType:
@@ -343,7 +354,7 @@ class Gametags(commands.Cog):
         else:
             await self._show_players_for_single_role(ctx, role_names[0])
 
-    # TODO handle react timeout exceptions (doesn't cause problems, but makes the devlog unreadable)
+    # TODO handle react timeout exceptions (doesn't cause problems, but makes the bot log unreadable)
     @commands.command(name='prune_tag', aliases=['prune'], usage='<tag>')
     @superuser_only()
     async def prune_unused_tag(self, ctx, tag):
@@ -562,62 +573,67 @@ async def setup(bot):
 
 class ItemtagRepository:
 
-    def __init__(self, debug):
+    def __init__(self):
         self.data_dir = 'data/'
-        self.debug_dir = 'debug/'
-        self.db_path = f'{self.data_dir if not debug else self.debug_dir}gametag.db'
+        self.db_path = f'{self.data_dir}gametag.db'
 
     def setup(self):
-        pathlib.Path(self.data_dir).mkdir(parents=True, exist_ok=True)
-        try:
-            conn = sqlite3.connect(self.db_path, isolation_level=None)
-            cursor = conn.cursor()
-            cursor.execute('PRAGMA journal_mode = wal')
-            cursor.execute('PRAGMA foreign_keys = ON')
+        if __debug__:
+            self.db_path = f'{debug_config.DEBUG_DIR}gametag.db'
+            self.backup_path = f'{debug_config.DEBUG_DIR}backup.db'
+            shutil.copyfile(self.backup_path, self.db_path)
+        else:
+            # TODO check if file exists & validate its table, and only reset if something's wrong?
+            pathlib.Path(self.data_dir).mkdir(parents=True, exist_ok=True)
+            try:
+                conn = sqlite3.connect(self.db_path, isolation_level=None)
+                cursor = conn.cursor()
+                cursor.execute('PRAGMA journal_mode = wal')
+                cursor.execute('PRAGMA foreign_keys = ON')
 
-            cursor.execute('BEGIN')
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS tags (
-                    id INTEGER PRIMARY KEY,
-                    description TEXT
-                )"""
-            )
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS games (
-                    id INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL
-                )"""
-            )
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS platforms (
-                    id INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL
-                )"""
-            )
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS game_tags (
-                    tag_id INTEGER,
-                    game_id INTEGER NOT NULL UNIQUE,
-                    PRIMARY KEY (tag_id),
-                    FOREIGN KEY (tag_id) REFERENCES tags(id),
-                    FOREIGN KEY (game_id) REFERENCES games(id)
-                )"""
-            )
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS platform_tags (
-                    tag_id INTEGER,
-                    platform_id INTEGER NOT NULL UNIQUE,
-                    PRIMARY KEY (tag_id),
-                    FOREIGN KEY (tag_id) REFERENCES tags(id),
-                    FOREIGN KEY (platform_id) REFERENCES platforms(id)
-                )"""
-            )
-            conn.commit()
-        except:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+                cursor.execute('BEGIN')
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS tags (
+                        id INTEGER PRIMARY KEY,
+                        description TEXT
+                    )"""
+                )
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS games (
+                        id INTEGER PRIMARY KEY,
+                        name TEXT NOT NULL
+                    )"""
+                )
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS platforms (
+                        id INTEGER PRIMARY KEY,
+                        name TEXT NOT NULL
+                    )"""
+                )
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS game_tags (
+                        tag_id INTEGER,
+                        game_id INTEGER NOT NULL UNIQUE,
+                        PRIMARY KEY (tag_id),
+                        FOREIGN KEY (tag_id) REFERENCES tags(id),
+                        FOREIGN KEY (game_id) REFERENCES games(id)
+                    )"""
+                )
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS platform_tags (
+                        tag_id INTEGER,
+                        platform_id INTEGER NOT NULL UNIQUE,
+                        PRIMARY KEY (tag_id),
+                        FOREIGN KEY (tag_id) REFERENCES tags(id),
+                        FOREIGN KEY (platform_id) REFERENCES platforms(id)
+                    )"""
+                )
+                conn.commit()
+            except:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
 
     async def add_item(self, item):
         try:
