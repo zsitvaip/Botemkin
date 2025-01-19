@@ -260,7 +260,7 @@ class Gametags(commands.Cog):
             return await ctx.send_help(ctx.command)
         await self._assign_tags_by_name(ctx, ItemType.platform, tag_names)
 
-    async def _remove_any_tags_by_name(self, ctx, tag_names):
+    async def _remove_tags_by_name_on_user(self, ctx, tag_names):
         selected_tags, unknown_tag_names = self._get_selected_tags(ctx.guild, tag_names)
         msg_str = ""
         if selected_tags:
@@ -296,6 +296,13 @@ class Gametags(commands.Cog):
 
         await ctx.send(msg_str)
 
+    async def _remove_role_in_guild(self, ctx, role):
+        await role.delete()
+
+    async def _remove_roles_in_guild(self, ctx, roles):
+        for role in roles:
+            await self._remove_role_in_guild(ctx, role)
+
     @commands.command(name='drop', aliases=['d'], usage='<tags>')
     async def drop(self, ctx, *tag_names):
         """Removes your listed tags.
@@ -309,7 +316,7 @@ class Gametags(commands.Cog):
         # required because *tag_names being empty does not trigger a MissingRequiredArgument
         if not tag_names:
             return await ctx.send_help(ctx.command)
-        await self._remove_any_tags_by_name(ctx, tag_names)
+        await self._remove_tags_by_name_on_user(ctx, tag_names)
 
     # TODO perhaps only display offline members if an extra parameter (such as 'all') is given
     @commands.command(name='players', aliases=['ps'], usage='<tags>')
@@ -331,6 +338,7 @@ class Gametags(commands.Cog):
         else:
             await self._show_players_for_single_role(ctx, role_names[0])
 
+    # TODO handle react timeout exceptions (doesn't cause problems, but makes the devlog unreadable)
     @commands.command(name='prune_tag', aliases=['prune'], usage='<tag>')
     @superuser_only()
     async def prune_unused_tag(self, ctx, tag):
@@ -349,11 +357,17 @@ class Gametags(commands.Cog):
             elif num == 0:
                 confirmation_message = await ctx.send(f"Tag '{tag}' confirmed to have 0 users. React with a thumbs-up 👍 to this message to confirm deletion.")
                 def check(reaction, user):
-                    return user == ctx.author and str(reaction.emoji) == '👍' and reaction.message.id == confirmation_message.id
+                    is_superuser = discord.utils.find(lambda role: 
+                        role.name.casefold() == config.SUPERUSER_ROLE.casefold(), ctx.author.roles) is not None
+                    return user == ctx.author and is_superuser and str(reaction.emoji) == '👍' and reaction.message.id == confirmation_message.id
                 reaction = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
 
                 if reaction:
-                    await ctx.send(f"Deleting tag '{tag}' ...")
+                    await ctx.send(f"Deleting tag '{tag}'...")
+                    await self._remove_role_in_guild(ctx, role)
+                    await self.repository.delete_tag(role.id)
+                    await ctx.send(f"Tag '{tag}' deleted!")
+
         else:
             await ctx.send(f"```Unknown tag: {role.name}```Use **!list** to print available tags.")
 
@@ -362,24 +376,39 @@ class Gametags(commands.Cog):
     async def prune_all_unused_tags(self, ctx):
         tags = await self.repository.get_all_tags()
         unused_roles = []
+        tags_with_no_role = []
         if tags:
             for tag in tags:
                 role = discord.utils.find(lambda role: role.id == tag[0], ctx.guild.roles)
-                if len(role.members) == 0:
+                if role is None:
+                    tags_with_no_role.append(tag)
+                elif len(role.members) == 0:
                     unused_roles.append(role)
         else:
-            await ctx.send(f"⚠ Repository is empty.")
+            await ctx.send(f"⚠ Repository query went wrong or no tags were found.")
+            return
+
+        if len(tags_with_no_role) > 0:
+            await ctx.send(f"{len(tags_with_no_role)} tags were found in Botemkin's database without associated roles. Pruning...")
+            await self.repository.delete_tags([tag[0] for tag in tags_with_no_role])
+
+        if len(unused_roles) == 0:
+            await ctx.send(f"No unused roles were found in Botemkin's database. Terminating.")
             return
 
         await ctx.send(f"The following roles are unused: {[role.name for role in unused_roles]}")
+        # TODO move this to helper function (402-407)
         confirmation_message = await ctx.send(f"React with a thumbs-up 👍 to this message to confirm the deletion of all these roles & tags.")
         def check(reaction, user):
-            return user == ctx.author and str(reaction.emoji) == '👍' and reaction.message.id == confirmation_message.id
+            is_superuser = discord.utils.find(lambda role: 
+                role.name.casefold() == config.SUPERUSER_ROLE.casefold(), ctx.author.roles) is not None
+            return user == ctx.author and is_superuser and str(reaction.emoji) == '👍' and reaction.message.id == confirmation_message.id
         reaction = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
         if reaction:
-            await ctx.send(f"Deleting tags ...")
-            # TODO add deletion to repo handler
-            # TODO add dc role deletion
+            await ctx.send(f"Deleting tag {[role.name for role in unused_roles]}...")
+            await self._remove_roles_in_guild(ctx, unused_roles)
+            await self.repository.delete_tags([role.id for role in unused_roles])
+            await ctx.send(f"Tags deleted!")
 
     async def _show_players_for_single_role(self, ctx, role_name):
         role = discord.utils.find(
@@ -471,6 +500,7 @@ class Gametags(commands.Cog):
             raise
         await ctx.send(f"The {item_type}tag {tag.mention} is now associated with *{item.name}*.")
 
+    # TODO: avoid role name overlap between platforms and games
     @commands.command(name='tag_game', aliases=['tag', 'tg', 't'], usage='<game_id> <role_name>')
     @superuser_only()
     async def tag_game(self, ctx, game_id: int, tag_name: str):
@@ -484,6 +514,7 @@ class Gametags(commands.Cog):
         !t 76885 SCVI
         """
         await self._tag_item(ctx, ItemType.game, game_id, tag_name)
+        # TODO handle overwrites (currently leaves old role in dc)
 
     @commands.command(name='tag_platform', aliases=['tag_plat', 'tp'], usage='<platform_id> <role_name>')
     @superuser_only()
@@ -690,6 +721,42 @@ class ItemtagRepository:
         finally:
             conn.close()
             return tags
+
+    # TODO beautify this somehow
+    async def delete_tag(self, tag):
+        try:
+            conn = sqlite3.connect(self.db_path, isolation_level=None)
+            cursor = conn.cursor()
+            
+            for _type in ["platform", "game"]:
+                type_ids = cursor.execute(f"""
+                SELECT {_type}_id FROM {_type}_tags
+                WHERE tag_id = {tag}
+                """).fetchall()
+
+                cursor.execute(f"""
+                DELETE FROM {_type}_tags
+                WHERE tag_id = {tag}
+                """)
+
+                for type_id in type_ids:
+                    cursor.execute(f"""
+                    DELETE FROM {_type}s
+                    WHERE id = {type_id[0]}
+                    """)
+
+            cursor.execute(f"""
+            DELETE FROM tags
+            WHERE id = {tag}
+            """)
+
+        finally:
+            conn.commit()
+            conn.close()
+    
+    async def delete_tags(self, tags):
+        for tag in tags:
+            await self.delete_tag(tag)
 
 class IgdbWrapper:
 
