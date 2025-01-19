@@ -49,7 +49,7 @@ class Gametags(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.repository = ItemtagRepository()
+        self.repository = ItemtagRepository(self.bot.debug)
         self.repository.setup()
         self.igdb_wrapper = IgdbWrapper(cog_config.IGDB_CLIENT_ID, cog_config.IGDB_CLIENT_SECRET)
 
@@ -557,9 +557,10 @@ async def setup(bot):
 
 class ItemtagRepository:
 
-    def __init__(self):
+    def __init__(self, debug):
         self.data_dir = 'data/'
-        self.db_path = f'{self.data_dir}gametag.db'
+        self.debug_dir = 'dir/'
+        self.db_path = f'{self.data_dir if not debug else self.debug_dir}gametag.db'
 
     def setup(self):
         pathlib.Path(self.data_dir).mkdir(parents=True, exist_ok=True)
@@ -739,6 +740,7 @@ class ItemtagRepository:
                 WHERE tag_id = {tag}
                 """)
 
+                # TODO use IN {list} maybe
                 for type_id in type_ids:
                     cursor.execute(f"""
                     DELETE FROM {_type}s

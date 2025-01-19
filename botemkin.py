@@ -31,9 +31,10 @@ INITIAL_EXTENSIONS = (
 class Botemkin(commands.Bot):
     """Burly bot."""
 
-    def __init__(self):
+    def __init__(self, debug = False):
         super().__init__(command_prefix=COMMAND_PREFIX, intents=INTENTS, description=DESCRIPTION)
         self.onboarding_enabled_date = datetime.strptime(config.ONBOARDING_ENABLED_DATE, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        self.debug = debug
 
     async def setup_hook(self):
         for extension in INITIAL_EXTENSIONS:
