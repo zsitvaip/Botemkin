@@ -3,6 +3,7 @@ from enum import Enum
 import logging
 import pathlib
 import sqlite3
+import csv
 
 import discord
 from discord.ext import commands
@@ -52,7 +53,11 @@ class Gametags(commands.Cog):
         self.repository = ItemtagRepository(self.bot.debug)
         self.repository.setup()
         self.igdb_wrapper = IgdbWrapper(cog_config.IGDB_CLIENT_ID, cog_config.IGDB_CLIENT_SECRET)
+        if self.bot.debug:
+            # TODO setup debug roles
+            pass
 
+    # don't commit
     async def is_developer(ctx):
         dev_role = discord.utils.find(
                 lambda role: role.name.casefold() == 'botemkin developer'.casefold(), ctx.author.roles)
@@ -141,7 +146,7 @@ class Gametags(commands.Cog):
         return None
     
     async def _get_paginator_for_all_itemtags(self, item_type, tags):
-        itemtags = await self.repository.find_itemtags_by_tags(item_type, tags, all=True)
+        itemtags = await self.repository.find_itemtags_by_tags(item_type, tags, find_all=True)
         if itemtags:
             paginator = commands.Paginator(prefix='```css', suffix='```', linesep='\n')
             paginator.add_line(f"Imported {item_type}s:", empty=True)
@@ -164,7 +169,7 @@ class Gametags(commands.Cog):
                 else:
                     await ctx.send(f"```There are currently no available {item_type}tags.```")
         else:
-            await ctx.send(f"```There are currently no available tags.```")
+            await ctx.send("```There are currently no available tags.```")
 
     async def _list_all_tags(self, ctx):
         available_tags = self._get_available_tags(ctx.guild)
@@ -296,12 +301,12 @@ class Gametags(commands.Cog):
 
         await ctx.send(msg_str)
 
-    async def _remove_role_in_guild(self, ctx, role):
+    async def _remove_role_in_guild(self, role):
         await role.delete()
 
-    async def _remove_roles_in_guild(self, ctx, roles):
+    async def _remove_roles_in_guild(self, roles):
         for role in roles:
-            await self._remove_role_in_guild(ctx, role)
+            await self._remove_role_in_guild(role)
 
     @commands.command(name='drop', aliases=['d'], usage='<tags>')
     async def drop(self, ctx, *tag_names):
@@ -364,7 +369,7 @@ class Gametags(commands.Cog):
 
                 if reaction:
                     await ctx.send(f"Deleting tag '{tag}'...")
-                    await self._remove_role_in_guild(ctx, role)
+                    await self._remove_role_in_guild(role)
                     await self.repository.delete_tag(role.id)
                     await ctx.send(f"Tag '{tag}' deleted!")
 
@@ -385,7 +390,7 @@ class Gametags(commands.Cog):
                 elif len(role.members) == 0:
                     unused_roles.append(role)
         else:
-            await ctx.send(f"⚠ Repository query went wrong or no tags were found.")
+            await ctx.send("⚠ Repository query went wrong or no tags were found.")
             return
 
         if len(tags_with_no_role) > 0:
@@ -393,12 +398,12 @@ class Gametags(commands.Cog):
             await self.repository.delete_tags([tag[0] for tag in tags_with_no_role])
 
         if len(unused_roles) == 0:
-            await ctx.send(f"No unused roles were found in Botemkin's database. Terminating.")
+            await ctx.send("No unused roles were found in Botemkin's database. Terminating.")
             return
 
         await ctx.send(f"The following roles are unused: {[role.name for role in unused_roles]}")
         # TODO move this to helper function (402-407)
-        confirmation_message = await ctx.send(f"React with a thumbs-up 👍 to this message to confirm the deletion of all these roles & tags.")
+        confirmation_message = await ctx.send("React with a thumbs-up 👍 to this message to confirm the deletion of all these roles & tags.")
         def check(reaction, user):
             is_superuser = discord.utils.find(lambda role: 
                 role.name.casefold() == config.SUPERUSER_ROLE.casefold(), ctx.author.roles) is not None
@@ -406,9 +411,9 @@ class Gametags(commands.Cog):
         reaction = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
         if reaction:
             await ctx.send(f"Deleting tag {[role.name for role in unused_roles]}...")
-            await self._remove_roles_in_guild(ctx, unused_roles)
+            await self._remove_roles_in_guild(unused_roles)
             await self.repository.delete_tags([role.id for role in unused_roles])
-            await ctx.send(f"Tags deleted!")
+            await ctx.send("Tags deleted!")
 
     async def _show_players_for_single_role(self, ctx, role_name):
         role = discord.utils.find(
@@ -559,7 +564,7 @@ class ItemtagRepository:
 
     def __init__(self, debug):
         self.data_dir = 'data/'
-        self.debug_dir = 'dir/'
+        self.debug_dir = 'debug/'
         self.db_path = f'{self.data_dir if not debug else self.debug_dir}gametag.db'
 
     def setup(self):
@@ -679,13 +684,13 @@ class ItemtagRepository:
                 break
         return item
 
-    async def find_itemtags_by_tags(self, item_type, tags, *, all = False):
+    async def find_itemtags_by_tags(self, item_type, tags, *, find_all = False):
         rows = []
         try:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
             cursor = conn.cursor()
 
-            if all:
+            if find_all:
                 cursor.execute(f"""
                     SELECT {item_type}_tags.tag_id, {item_type}s.id, {item_type}s.name
                     FROM {item_type}s
@@ -717,11 +722,11 @@ class ItemtagRepository:
         try:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
             cursor = conn.cursor()
-            cursor.execute(f"""SELECT id FROM tags""")
+            cursor.execute("""SELECT id FROM tags""")
             tags = cursor.fetchall()
         finally:
-            conn.close()
-            return tags
+            conn.close()            
+        return tags
 
     # TODO beautify this somehow
     async def delete_tag(self, tag):
@@ -772,19 +777,19 @@ class IgdbWrapper:
     async def __renew_access_token(self):
         log.info('Renewing IGDB access token')
         payload = {'client_id': self.__IGDB_CLIENT_ID, 'client_secret': self.__IGDB_CLIENT_SECRET, 'grant_type': 'client_credentials'}
-        result = requests.post(self.__twitch_url, params=payload)
+        result = requests.post(self.__twitch_url, params=payload, timeout=60)
         result.raise_for_status()
         self.__access_token = result.json()['access_token']
 
     async def __post_request(self, url, data):
-        for i in range(2):
+        for _ in range(2):
             headers = {
                 'Client-ID': self.__IGDB_CLIENT_ID,
                 'Authorization': f"Bearer {self.__access_token}",
                 'Accept': 'application/json',
             }
             try:
-                result = requests.post(url, data=data, headers=headers)
+                result = requests.post(url, data=data, headers=headers, timeout=60)
                 result.raise_for_status()
             except requests.exceptions.HTTPError as err:
                 if err.response.status_code == 401:
