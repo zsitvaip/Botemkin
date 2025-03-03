@@ -30,7 +30,7 @@ def superuser_only():
 
 class ItemType(Enum):
     game = 1
-    platform = 2
+    # platform = 2
 
     def __str__(self):
         return self.name
@@ -130,20 +130,6 @@ class Gametags(commands.Cog):
         """
         await self._search_IGDB_item(ctx, ItemType.game, game_name)
 
-    @commands.command(name='search_platform', aliases=['search_plat', 'sp'], usage='<platform_name>')
-    @superuser_only()
-    async def search_IGDB_platform(self, ctx, *, platform_name):
-        """Search IGDB for given platform name. (superuser-only)
-
-        Use to get the platform id to be used with the !tag_platform command.
-
-        Usage examples:
-
-        !search_plat plebstation
-        !sp pc masterrace
-        """
-        await self._search_IGDB_item(ctx, ItemType.platform, platform_name)
-
     async def _get_paginator_for_available_itemtags(self, item_type, tags):
         itemtags = await self.repository.find_itemtags_by_tags(item_type, tags)
         if itemtags:
@@ -196,7 +182,7 @@ class Gametags(commands.Cog):
     async def list_available_tags(self, ctx, arg=None):
         """Lists available tags.
 
-        Use with 'all' to show all games/platforms imported from IGDB including ones without tags associated with them.
+        Use with 'all' to show all games imported from IGDB including ones without tags associated with them.
 
         Usage examples:
 
@@ -261,34 +247,17 @@ class Gametags(commands.Cog):
             return await ctx.send_help(ctx.command)
         await self._assign_tags_by_name(ctx, ItemType.game, tag_names)
 
-    @commands.command(name='platform', aliases=['plat'], usage='<platformtags>')
-    async def play_on_platform(self, ctx, *tag_names):
-        """Assigns you the listed platformtags.
-
-        Usage examples:
-
-        !platform PC
-        !plat PS4 XBONE
-        """
-
-        # required because *tag_names being empty does not trigger a MissingRequiredArgument
-        if not tag_names:
-            return await ctx.send_help(ctx.command)
-        await self._assign_tags_by_name(ctx, ItemType.platform, tag_names)
-
-    async def _remove_tags_by_name_on_user(self, ctx, tag_names):
+    async def _remove_any_tags_by_name(self, ctx, tag_names):
         selected_tags, unknown_tag_names = self._get_selected_tags(ctx.guild, tag_names)
         msg_str = ""
         if selected_tags:
 
             gametags = await self.repository.find_itemtags_by_tags(ItemType.game, selected_tags)
-            platformtags = await self.repository.find_itemtags_by_tags(ItemType.platform, selected_tags)
-            itemtags = gametags + platformtags
             tags = []
-            if itemtags:
+            if gametags:
 
                 item_names = []
-                for itemtag in itemtags:
+                for itemtag in gametags:
                     tags.append(itemtag.tag)
                     item_names.append(itemtag.item.name)
 
@@ -532,35 +501,9 @@ class Gametags(commands.Cog):
         await self._tag_item(ctx, ItemType.game, game_id, tag_name)
         # TODO handle overwrites (currently leaves old role in dc)
 
-    @commands.command(name='tag_platform', aliases=['tag_plat', 'tp'], usage='<platform_id> <role_name>')
-    @superuser_only()
-    async def tag_platform(self, ctx, platform_id: int, tag_name: str):
-        """Associate platform with given tag. (superuser-only)
-
-        To find the platform id use the !search_platform command.
-
-        Usage examples:
-
-        !tag_platform 6 PC
-        !tag_plat 48 PS4
-        """
-        await self._tag_item(ctx, ItemType.platform, platform_id, tag_name)
-
-    # non superuser-only commands print their !help when not enough arguments are given
-    # @play_game.error
-    @play_on_platform.error
-    @drop.error
-    @show_players.error
-    async def _missing_required_argument_error(self, ctx, error):
-        if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send_help(ctx.command)
-        raise error
-
-    # superuser-only commands print !help like regular ones but also print other errors
+    # superuser-only commands print !help as well as print other errors
     @search_IGDB_game.error
-    @search_IGDB_platform.error
     @tag_game.error
-    @tag_platform.error
     async def _verbose_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.send_help(ctx.command)
@@ -591,49 +534,49 @@ class ItemtagRepository:
                 cursor.execute('PRAGMA journal_mode = wal')
                 cursor.execute('PRAGMA foreign_keys = ON')
 
-                cursor.execute('BEGIN')
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS tags (
-                        id INTEGER PRIMARY KEY,
-                        description TEXT
-                    )"""
-                )
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS games (
-                        id INTEGER PRIMARY KEY,
-                        name TEXT NOT NULL
-                    )"""
-                )
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS platforms (
-                        id INTEGER PRIMARY KEY,
-                        name TEXT NOT NULL
-                    )"""
-                )
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS game_tags (
-                        tag_id INTEGER,
-                        game_id INTEGER NOT NULL UNIQUE,
-                        PRIMARY KEY (tag_id),
-                        FOREIGN KEY (tag_id) REFERENCES tags(id),
-                        FOREIGN KEY (game_id) REFERENCES games(id)
-                    )"""
-                )
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS platform_tags (
-                        tag_id INTEGER,
-                        platform_id INTEGER NOT NULL UNIQUE,
-                        PRIMARY KEY (tag_id),
-                        FOREIGN KEY (tag_id) REFERENCES tags(id),
-                        FOREIGN KEY (platform_id) REFERENCES platforms(id)
-                    )"""
-                )
-                conn.commit()
-            except:
-                conn.rollback()
-                raise
-            finally:
-                conn.close()
+            cursor.execute('BEGIN')
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS tags (
+                    id INTEGER PRIMARY KEY,
+                    description TEXT
+                )"""
+            )
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS games (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL
+                )"""
+            )
+            # cursor.execute("""
+            #     CREATE TABLE IF NOT EXISTS platforms (
+            #         id INTEGER PRIMARY KEY,
+            #         name TEXT NOT NULL
+            #     )"""
+            # )
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS game_tags (
+                    tag_id INTEGER,
+                    game_id INTEGER NOT NULL UNIQUE,
+                    PRIMARY KEY (tag_id),
+                    FOREIGN KEY (tag_id) REFERENCES tags(id),
+                    FOREIGN KEY (game_id) REFERENCES games(id)
+                )"""
+            )
+            # cursor.execute("""
+            #     CREATE TABLE IF NOT EXISTS platform_tags (
+            #         tag_id INTEGER,
+            #         platform_id INTEGER NOT NULL UNIQUE,
+            #         PRIMARY KEY (tag_id),
+            #         FOREIGN KEY (tag_id) REFERENCES tags(id),
+            #         FOREIGN KEY (platform_id) REFERENCES platforms(id)
+            #     )"""
+            # )
+            conn.commit()
+        except:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     async def add_item(self, item):
         try:
