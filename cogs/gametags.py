@@ -64,7 +64,10 @@ class Gametags(commands.Cog):
             is_superuser = discord.utils.find(lambda role: 
                 role.name.casefold() == config.SUPERUSER_ROLE.casefold(), ctx.author.roles) is not None
             return user == ctx.author and is_superuser and str(reaction.emoji) == emoji and reaction.message.id == confirmation_message.id
-        return await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
+        try:
+            return await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
+        except asyncio.TimeoutError: # TODO test this
+            await confirmation_message.edit(content=confirmation_message.content + f'\nConfirmation time-out.')            
 
     # TODO make async?
     def _get_available_tags(self, guild : discord.Guild):
@@ -315,7 +318,7 @@ class Gametags(commands.Cog):
         else:
             await self._show_players_for_single_role(ctx, role_names[0])
 
-    # TODO handle react timeout exceptions (doesn't cause problems, but makes the devlog unreadable)
+    # TODO handle react timeout exceptions (doesn't cause problems, but makes the bot log unreadable)
     @commands.command(name='prune_tag', aliases=['prune'], usage='<tag>')
     @superuser_only()
     async def prune_unused_tag(self, ctx, tag):
