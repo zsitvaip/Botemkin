@@ -7,7 +7,7 @@ import asyncio
 
 if __debug__:
     import shutil
-    from . import debug_config
+    import debug_config
 
 import discord
 from discord.ext import commands
@@ -16,7 +16,7 @@ from discord.ext import commands
 import requests
 
 import config
-from . import cogs_config
+import cogs_config
 
 log = logging.getLogger(__name__)
 
@@ -58,7 +58,6 @@ class Gametags(commands.Cog):
         self.repository.setup()
         self.igdb_wrapper = IgdbWrapper(cogs_config.IGDB_CLIENT_ID, cogs_config.IGDB_CLIENT_SECRET)
 
-    # don't commit
     async def is_developer(ctx):
         dev_role = discord.utils.find(
                 lambda role: role.name.casefold() == 'botemkin developer'.casefold(), ctx.author.roles)
@@ -79,11 +78,18 @@ class Gametags(commands.Cog):
     @commands.Cog.listener() 
     async def on_ready(self):
         # on_ready because when cog_load is raised, bot.guilds is empty
-        # BUG for some god forsaken reason this creates duplicate roles
         if __debug__:
             debug_guild = discord.utils.find(lambda guild: debug_config.DEBUG_GUILD_ID == guild.id, self.bot.guilds)
+            if not debug_guild:
+                raise Exception("Debug guild not found, double-check your config.")
             for role in debug_config.DEBUG_ROLES:
-                await debug_guild.create_role(name=role, mentionable=True, reason="Role for debugging purposes.")
+                current_role = next((_role for _role in debug_guild.roles if _role.name == role[0]), None)
+                if not current_role:
+                    current_role = await debug_guild.create_role(name=role[0] , mentionable=True, reason="Role for debugging purposes.")
+                current_item = Item("game", role[1], role[2], "")
+                current_itemtag = Itemtag(current_item, current_role)
+                await self.repository.add_item(current_item)
+                await self.repository.add_itemtag(current_itemtag)
 
     # TODO make async?
     def _get_available_tags(self, guild : discord.Guild):
@@ -522,17 +528,14 @@ async def setup(bot):
 class ItemtagRepository:
 
     def __init__(self):
-        self.data_dir = 'data/'
+        self.data_dir = 'data/' if not __debug__ else debug_config.DEBUG_DIR
         self.db_path = f'{self.data_dir}gametag.db'
 
-    def setup(self):
+    def setup(self):        
+        # TBDL check if file exists & validate its tables, and only reset if something's wrong?
+        pathlib.Path(self.data_dir).mkdir(parents=True, exist_ok=True)
         if __debug__:
-            self.db_path = f'{debug_config.DEBUG_DIR}gametag.db'
-            self.backup_path = f'{debug_config.DEBUG_DIR}backup.db'
-            shutil.copyfile(self.backup_path, self.db_path)
-        else:
-            # TODO check if file exists & validate its table, and only reset if something's wrong?
-            pathlib.Path(self.data_dir).mkdir(parents=True, exist_ok=True)
+            pathlib.Path(self.db_path).unlink(missing_ok=True) 
         try:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
             cursor = conn.cursor()
