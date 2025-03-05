@@ -8,7 +8,7 @@ from deep_translator.constants import GOOGLE_LANGUAGES_TO_CODES
 from deep_translator import single_detection, GoogleTranslator
 import requests
 
-from . import config as cog_config
+from . import cogs_config as cog_config
 
 log = logging.getLogger(__name__)
 
