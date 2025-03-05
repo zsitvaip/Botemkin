@@ -7,8 +7,8 @@ MOD_CHANNEL = ''
 HOME_CHANNEL = ''
 GENERAL_CHANNEL = ''
 MATCHMAKING_CHANNEL = ''
-WELCOME_TEXT = \"""
-\"""
+WELCOME_TEXT = \"\"\"
+\"\"\"
 GUILD_ID = ''
 SUPERUSER_ROLE = ''
 RESTRICTED_ROLE = ''
@@ -16,7 +16,7 @@ ONBOARDING_ENABLED_DATE = ''""",
 
 "cogs_config.py": """DETECT_LANGUAGE_API_KEY = ""
 IGDB_CLIENT_ID = ""
-IGDB_CLIENT_SECRET = """"",
+IGDB_CLIENT_SECRET = ''""",
 
 "debug_config.py" : """DEBUG_GUILD_ID = ""
 DEBUG_ROLES = [
