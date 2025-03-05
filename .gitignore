@@ -2,7 +2,6 @@ venv/
 data/
 *.pyc
 *.log
-config.py
-cogs_config.py
+*config.py
 launch.json
 /.vs
