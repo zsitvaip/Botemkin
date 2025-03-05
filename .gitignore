@@ -2,5 +2,6 @@ venv/
 data/
 *.pyc
 *.log
-config.py
+*config.py
 launch.json
+/.vs
