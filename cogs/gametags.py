@@ -356,7 +356,7 @@ class Gametags(commands.Cog):
         tags_with_no_role = []
         if tags:
             for tag in tags:
-                role = discord.utils.find(lambda role: role.id == tag[0], ctx.guild.roles)
+                role = discord.utils.find(lambda role: role.id == tag, ctx.guild.roles)
                 if role is None:
                     tags_with_no_role.append(tag)
                 elif len(role.members) == 0:
@@ -367,7 +367,7 @@ class Gametags(commands.Cog):
 
         if len(tags_with_no_role) > 0:
             await ctx.send(f"{len(tags_with_no_role)} tags were found in Botemkin's database without associated roles. Pruning...")
-            await self.repository.delete_tags([tag[0] for tag in tags_with_no_role])
+            await self.repository.delete_tags([tag for tag in tags_with_no_role])
 
         if len(unused_roles) == 0:
             await ctx.send(f"No unused roles were found in Botemkin's database. Terminating.")
@@ -474,7 +474,7 @@ class Gametags(commands.Cog):
             raise
         await ctx.send(f"The {item_type}tag {tag.mention} is now associated with *{item.name}*.")
 
-    # TODO: avoid role name overlap between platforms and games
+    # TBDL: avoid role name overlap between platforms and games
     @commands.command(name='tag_game', aliases=['tag', 'tg', 't'], usage='<game_id> <role_name>')
     @superuser_only()
     async def tag_game(self, ctx, game_id: int, tag_name: str):
@@ -665,7 +665,7 @@ class ItemtagRepository:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
             cursor = conn.cursor()
             cursor.execute(f"""SELECT id FROM tags""")
-            tags = cursor.fetchall()
+            tags = [tag[0] for tag in cursor.fetchall()]
         finally:
             conn.close()
             return tags
