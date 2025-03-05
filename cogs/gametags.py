@@ -1,8 +1,9 @@
-from collections import namedtuple
+﻿from collections import namedtuple
 from enum import Enum
 import logging
 import pathlib
 import sqlite3
+import asyncio
 
 if __debug__:
     import shutil
@@ -62,6 +63,18 @@ class Gametags(commands.Cog):
         dev_role = discord.utils.find(
                 lambda role: role.name.casefold() == 'botemkin developer'.casefold(), ctx.author.roles)
         return dev_role is not None
+
+    async def confirm_superuser_reaction(self, message, emoji, ctx):
+        confirmation_message = await ctx.send(message)
+        def check(reaction, user):
+            is_superuser = discord.utils.find(lambda role: 
+                role.name.casefold() == config.SUPERUSER_ROLE.casefold(), ctx.author.roles) is not None
+            return user == ctx.author and is_superuser and str(reaction.emoji) == emoji and reaction.message.id == confirmation_message.id
+        try:
+            return await self.bot.wait_for('reaction_add', timeout=20.0, check=check)
+        except asyncio.TimeoutError:
+            await confirmation_message.edit(content=
+                "~~" + confirmation_message.content + "~~" + f'\nConfirmation time-out, cancelling.')            
 
     @commands.Cog.listener() 
     async def on_ready(self):
@@ -323,7 +336,6 @@ class Gametags(commands.Cog):
         else:
             await self._show_players_for_single_role(ctx, role_names[0])
 
-    # TODO handle react timeout exceptions (doesn't cause problems, but makes the bot log unreadable)
     @commands.command(name='prune_tag', aliases=['prune'], usage='<tag>')
     @superuser_only()
     async def prune_unused_tag(self, ctx, tag):
@@ -339,13 +351,9 @@ class Gametags(commands.Cog):
             num = len(role.members)
             if num > 0:
                 await ctx.send(f"⚠ Tag *{role.name}* has {num} users associated with it.")
-            elif num == 0:
-                confirmation_message = await ctx.send(f"Tag '{tag}' confirmed to have 0 users. React with a thumbs-up 👍 to this message to confirm deletion.")
-                def check(reaction, user):
-                    is_superuser = discord.utils.find(lambda role: 
-                        role.name.casefold() == config.SUPERUSER_ROLE.casefold(), ctx.author.roles) is not None
-                    return user == ctx.author and is_superuser and str(reaction.emoji) == '👍' and reaction.message.id == confirmation_message.id
-                reaction = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
+            elif num == 0:                
+                reaction = await self.confirm_superuser_reaction(
+                    f"Tag '{tag}' confirmed to have 0 users. React with a thumbs-up 👍 to this message to confirm deletion.", '👍', ctx)
 
                 if reaction:
                     await ctx.send(f"Deleting tag '{tag}'...")
@@ -364,7 +372,7 @@ class Gametags(commands.Cog):
         tags_with_no_role = []
         if tags:
             for tag in tags:
-                role = discord.utils.find(lambda role: role.id == tag[0], ctx.guild.roles)
+                role = discord.utils.find(lambda role: role.id == tag, ctx.guild.roles)
                 if role is None:
                     tags_with_no_role.append(tag)
                 elif len(role.members) == 0:
@@ -375,20 +383,17 @@ class Gametags(commands.Cog):
 
         if len(tags_with_no_role) > 0:
             await ctx.send(f"{len(tags_with_no_role)} tags were found in Botemkin's database without associated roles. Pruning...")
-            await self.repository.delete_tags([tag[0] for tag in tags_with_no_role])
+            await self.repository.delete_tags([tag for tag in tags_with_no_role])
 
         if len(unused_roles) == 0:
             await ctx.send("No unused roles were found in Botemkin's database. Terminating.")
             return
 
         await ctx.send(f"The following roles are unused: {[role.name for role in unused_roles]}")
-        # TODO move this to helper function (402-407)
-        confirmation_message = await ctx.send("React with a thumbs-up 👍 to this message to confirm the deletion of all these roles & tags.")
-        def check(reaction, user):
-            is_superuser = discord.utils.find(lambda role: 
-                role.name.casefold() == config.SUPERUSER_ROLE.casefold(), ctx.author.roles) is not None
-            return user == ctx.author and is_superuser and str(reaction.emoji) == '👍' and reaction.message.id == confirmation_message.id
-        reaction = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
+
+        reaction = await self.confirm_superuser_reaction(
+            f"React with a thumbs-up 👍 to this message to confirm the deletion of all these roles & tags.", '👍', ctx)
+
         if reaction:
             await ctx.send(f"Deleting tag {[role.name for role in unused_roles]}...")
             await self._remove_roles_in_guild(unused_roles)
@@ -485,7 +490,7 @@ class Gametags(commands.Cog):
             raise
         await ctx.send(f"The {item_type}tag {tag.mention} is now associated with *{item.name}*.")
 
-    # TODO: avoid role name overlap between platforms and games
+    # TBDL: avoid role name overlap between platforms and games
     @commands.command(name='tag_game', aliases=['tag', 'tg', 't'], usage='<game_id> <role_name>')
     @superuser_only()
     async def tag_game(self, ctx, game_id: int, tag_name: str):
@@ -528,11 +533,11 @@ class ItemtagRepository:
         else:
             # TODO check if file exists & validate its table, and only reset if something's wrong?
             pathlib.Path(self.data_dir).mkdir(parents=True, exist_ok=True)
-            try:
-                conn = sqlite3.connect(self.db_path, isolation_level=None)
-                cursor = conn.cursor()
-                cursor.execute('PRAGMA journal_mode = wal')
-                cursor.execute('PRAGMA foreign_keys = ON')
+        try:
+            conn = sqlite3.connect(self.db_path, isolation_level=None)
+            cursor = conn.cursor()
+            cursor.execute('PRAGMA journal_mode = wal')
+            cursor.execute('PRAGMA foreign_keys = ON')
 
             cursor.execute('BEGIN')
             cursor.execute("""
@@ -681,35 +686,34 @@ class ItemtagRepository:
         try:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
             cursor = conn.cursor()
-            cursor.execute("""SELECT id FROM tags""")
-            tags = cursor.fetchall()
+            cursor.execute(f"""SELECT id FROM tags""")
+            tags = [tag[0] for tag in cursor.fetchall()]
         finally:
             conn.close()            
         return tags
 
-    # TODO beautify this somehow
+    # TBDL beautify this somehow
     async def delete_tag(self, tag):
         try:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
             cursor = conn.cursor()
-            
-            for _type in ["platform", "game"]:
-                type_ids = cursor.execute(f"""
-                SELECT {_type}_id FROM {_type}_tags
-                WHERE tag_id = {tag}
-                """).fetchall()
 
+            game_ids = cursor.execute(f"""
+            SELECT game_id FROM game_tags
+            WHERE tag_id = {tag}
+            """).fetchall()
+            game_ids = [game_id[0] for game_id in game_ids] # unfold tuples into a simple list
+
+            for game_id in game_ids:
                 cursor.execute(f"""
-                DELETE FROM {_type}_tags
-                WHERE tag_id = {tag}
+                DELETE FROM games
+                WHERE id = {game_id}
                 """)
 
-                # TODO use IN {list} maybe
-                for type_id in type_ids:
-                    cursor.execute(f"""
-                    DELETE FROM {_type}s
-                    WHERE id = {type_id[0]}
-                    """)
+            cursor.execute(f"""
+            DELETE FROM game_tags
+            WHERE tag_id = {tag}
+            """)
 
             cursor.execute(f"""
             DELETE FROM tags
