@@ -186,7 +186,6 @@ class Gametags(commands.Cog):
             await ctx.send("```There are currently no available tags.```")
 
     # TODO what's the use-case for unused tags without roles?
-    # why is it returning stuff that ive deleted anyway
     async def _list_all_tags(self, ctx):
         available_tags = self._get_available_tags(ctx.guild)
         for item_type in ItemType:
