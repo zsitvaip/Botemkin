@@ -1,8 +1,9 @@
-from collections import namedtuple
+﻿from collections import namedtuple
 from enum import Enum
 import logging
 import pathlib
 import sqlite3
+import asyncio
 
 import discord
 from discord.ext import commands
@@ -65,9 +66,10 @@ class Gametags(commands.Cog):
                 role.name.casefold() == config.SUPERUSER_ROLE.casefold(), ctx.author.roles) is not None
             return user == ctx.author and is_superuser and str(reaction.emoji) == emoji and reaction.message.id == confirmation_message.id
         try:
-            return await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
-        except asyncio.TimeoutError: # TODO test this
-            await confirmation_message.edit(content=confirmation_message.content + f'\nConfirmation time-out.')            
+            return await self.bot.wait_for('reaction_add', timeout=20.0, check=check)
+        except asyncio.TimeoutError:
+            await confirmation_message.edit(content=
+                "~~" + confirmation_message.content + "~~" + f'\nConfirmation time-out, cancelling.')            
 
     # TODO make async?
     def _get_available_tags(self, guild : discord.Guild):
@@ -318,7 +320,6 @@ class Gametags(commands.Cog):
         else:
             await self._show_players_for_single_role(ctx, role_names[0])
 
-    # TODO handle react timeout exceptions (doesn't cause problems, but makes the bot log unreadable)
     @commands.command(name='prune_tag', aliases=['prune'], usage='<tag>')
     @superuser_only()
     async def prune_unused_tag(self, ctx, tag):
@@ -669,29 +670,28 @@ class ItemtagRepository:
             conn.close()
             return tags
 
-    # TODO beautify this somehow
-    # TODO remove/change platform deletion
+    # TBDL beautify this somehow
     async def delete_tag(self, tag):
         try:
             conn = sqlite3.connect(self.db_path, isolation_level=None)
             cursor = conn.cursor()
-            
-            for _type in ["platform", "game"]:
-                type_ids = cursor.execute(f"""
-                SELECT {_type}_id FROM {_type}_tags
-                WHERE tag_id = {tag}
-                """).fetchall()
 
+            game_ids = cursor.execute(f"""
+            SELECT game_id FROM game_tags
+            WHERE tag_id = {tag}
+            """).fetchall()
+            game_ids = [game_id[0] for game_id in game_ids] # unfold tuples into a simple list
+
+            for game_id in game_ids:
                 cursor.execute(f"""
-                DELETE FROM {_type}_tags
-                WHERE tag_id = {tag}
+                DELETE FROM games
+                WHERE id = {game_id}
                 """)
 
-                for type_id in type_ids:
-                    cursor.execute(f"""
-                    DELETE FROM {_type}s
-                    WHERE id = {type_id[0]}
-                    """)
+            cursor.execute(f"""
+            DELETE FROM game_tags
+            WHERE tag_id = {tag}
+            """)
 
             cursor.execute(f"""
             DELETE FROM tags
