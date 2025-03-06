@@ -1,8 +1,8 @@
-venv/
-data/
-*.pyc
-*.log
-*config.py
+.vs/
 *.db
+*.log
+*.pyc
+*config.py
+data/
 launch.json
-/.vs
+venv/

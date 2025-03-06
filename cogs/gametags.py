@@ -44,7 +44,7 @@ class ItemType(Enum):
             return 'on '
 
 # TODO python 3.7: consider changing these to dataclasses, setting defaults is also simpler
-Item = namedtuple('Item', 'type id name slug')
+Item = namedtuple('Item', 'type id name')
 Item.__new__.__defaults__ = (None,) * len(Item._fields)
 
 Itemtag = namedtuple('Itemtag', 'item tag')
@@ -86,7 +86,7 @@ class Gametags(commands.Cog):
                 current_role = next((_role for _role in debug_guild.roles if _role.name == role[0]), None)
                 if not current_role:
                     current_role = await debug_guild.create_role(name=role[0] , mentionable=True, reason="Role for debugging purposes.")
-                current_item = Item("game", role[1], role[2], "")
+                current_item = Item("game", role[1], role[2])
                 current_itemtag = Itemtag(current_item, current_role)
                 await self.repository.add_item(current_item)
                 await self.repository.add_itemtag(current_itemtag)
@@ -126,9 +126,17 @@ class Gametags(commands.Cog):
             items = await self.igdb_wrapper.find_items_by_name(item_type, item_name)
             table_rows = []
             for item in items:
-                table_rows.append(f"#{item.id} {item.name} ({item.slug})")
+                table_rows.append(f"#{item.id} {item.name}")
             if table_rows:
-                await ctx.send(f"Search results from the *Internet Game Database* (<https://www.igdb.com>):```css\n{chr(10).join(table_rows)}```")
+                await ctx.send(f"Search results from the *Internet Game Database* (<https://www.igdb.com>):\n")
+
+                paginator = commands.Paginator(prefix='```css', suffix='```', linesep='\n')
+                for row in table_rows:
+                    paginator.add_line(row)
+
+                for page in paginator.pages:
+                    await ctx.send(page)
+
             else:
                 await ctx.send("No search results from the *Internet Game Database* (<https://www.igdb.com>).")
         except:
@@ -778,10 +786,10 @@ class IgdbWrapper:
 
     async def find_items_by_name(self, item_type, item_name):
         url = self.__igdb_url + f"{item_type}s/"
-        data = f"fields id,name,slug; sort first_release_date desc; limit 20; where name ~ *\"{item_name}\"*;"
+        data = f"fields id,name; sort first_release_date desc; limit 20; where name ~ *\"{item_name}\"*;"
 
         result = await self.__post_request(url, data)
         items = []
         for elem in result.json():
-            items.append(Item(item_type, elem['id'], elem['name'], elem['slug']))
+            items.append(Item(item_type, elem['id'], elem['name']))
         return items
