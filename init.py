@@ -9,20 +9,20 @@ GENERAL_CHANNEL = ''
 MATCHMAKING_CHANNEL = ''
 WELCOME_TEXT = \"\"\"
 \"\"\"
-GUILD_ID = ''
+GUILD_ID = 
 SUPERUSER_ROLE = ''
 RESTRICTED_ROLE = ''
 ONBOARDING_ENABLED_DATE = ''""",
 
-"cogs_config.py": """DETECT_LANGUAGE_API_KEY = ""
-IGDB_CLIENT_ID = ""
+"cogs_config.py": """DETECT_LANGUAGE_API_KEY = ''
+IGDB_CLIENT_ID = ''
 IGDB_CLIENT_SECRET = ''""",
 
-"debug_config.py" : """DEBUG_GUILD_ID = ""
+"debug_config.py" : """DEBUG_GUILD_ID = 
 DEBUG_ROLES = [
     # role name, igdb id, game name
-    ["", "", ""],
-    ["", "", ""]
+    ['','', ''],
+    ['', '', '']
 ]
 DEBUG_DIR = ''"""}
 
