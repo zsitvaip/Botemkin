@@ -3,5 +3,6 @@ data/
 *.pyc
 *.log
 *config.py
+*.db
 launch.json
 /.vs
