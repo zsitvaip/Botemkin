@@ -3,6 +3,7 @@ from enum import Enum
 import logging
 import pathlib
 import sqlite3
+from contextlib import closing
 
 import discord
 from discord.ext import commands
@@ -434,13 +435,22 @@ class ItemtagRepository:
 
     def setup(self):
         pathlib.Path(self.data_dir).mkdir(parents=True, exist_ok=True)
+        
+        # TODO use closing context manager instead of try/except once sqlite3 autocommit parameter becomes available for connect (python>=3.12)
+            # - all DB connections should turn off autocommit and manually commit changes for clarity
+            # - conn.commit() will need to be called for all DB changes
+            # - conn.rollback() and conn.close() will be handled by the closing context manager (i.e. less boilerplate)
+            # - cursor.execute('BEGIN') will be handled by first cursor.execute() that implicitly triggers a transaction as needed (e.g. INSERT)
+                # so remove explicit call
+            # Example: with closing(sqlite3.connect(self.db_path, autocommit=False)) as conn:
+        conn = sqlite3.connect(self.db_path)
         try:
-            conn = sqlite3.connect(self.db_path, isolation_level=None)
             cursor = conn.cursor()
             cursor.execute('PRAGMA journal_mode = wal')
             cursor.execute('PRAGMA foreign_keys = ON')
 
             cursor.execute('BEGIN')
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS tags (
                     id INTEGER PRIMARY KEY,
@@ -485,23 +495,26 @@ class ItemtagRepository:
             conn.close()
 
     async def add_item(self, item):
+        conn = sqlite3.connect(self.db_path)
         try:
-            conn = sqlite3.connect(self.db_path, isolation_level=None)
-            cursor = conn.cursor()
-            cursor.execute(f"INSERT INTO {item.type}s (id, name) VALUES (?, ?)", [item.id, item.name])
+            # TODO see note on autocommit
+            with closing(sqlite3.connect(self.db_path)) as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"INSERT INTO {item.type}s (id, name) VALUES (?, ?)", [item.id, item.name])
+                # conn.commit()
             return True
         except sqlite3.IntegrityError:
             return False
-        finally:
-            conn.close()
 
     async def add_itemtag(self, itemtag):
         item = itemtag.item
         tag = itemtag.tag
 
+        # TODO see note on autocommit
+        conn = sqlite3.connect(self.db_path)
         try:
-            conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+            cursor.execute('BEGIN')
 
             # insert or replace into tags
             cursor.execute("""
@@ -521,10 +534,10 @@ class ItemtagRepository:
         finally:
             conn.close()
 
+
     async def find_item_by_tag(self, item_type, tag):
         item = None
-        try:
-            conn = sqlite3.connect(self.db_path, isolation_level=None)
+        with closing(sqlite3.connect(self.db_path)) as conn:
             cursor = conn.cursor()
 
             cursor.execute(f"""
@@ -537,8 +550,6 @@ class ItemtagRepository:
             row = cursor.fetchone()
             if (row):
                 item = Item(item_type, row[0], row[1])
-        finally:
-            conn.close()
         return item
 
     async def find_any_item_by_tag(self, tag):
@@ -551,8 +562,7 @@ class ItemtagRepository:
 
     async def find_itemtags_by_tags(self, item_type, tags, *, all = False):
         rows = []
-        try:
-            conn = sqlite3.connect(self.db_path, isolation_level=None)
+        with closing(sqlite3.connect(self.db_path)) as conn:
             cursor = conn.cursor()
 
             if all:
@@ -571,8 +581,6 @@ class ItemtagRepository:
                     ORDER BY {item_type}s.name ASC
                 """, [tag.id for tag in tags])
             rows = cursor.fetchall()
-        finally:
-            conn.close()
 
         itemtags = []
         if rows:
