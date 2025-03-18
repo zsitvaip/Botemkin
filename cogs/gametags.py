@@ -95,7 +95,14 @@ class Gametags(commands.Cog):
             for item in items:
                 table_rows.append(f"#{item.id} {item.name} ({item.slug})")
             if table_rows:
-                await ctx.send(f"Search results from the *Internet Game Database* (<https://www.igdb.com>):```css\n{chr(10).join(table_rows)}```")
+                paginator = commands.Paginator(prefix='```css', suffix='```', linesep='\n')
+                paginator.add_line(f"Search results from the *Internet Game Database* (<https://www.igdb.com>):{paginator.prefix}")
+                for row in table_rows:
+                    paginator.add_line(row)
+
+                pages = [paginator.pages[0][len(paginator.prefix):]] + paginator.pages[1:]
+                for page in pages:
+                    await ctx.send(page)
             else:
                 await ctx.send("No search results from the *Internet Game Database* (<https://www.igdb.com>).")
         except:
@@ -116,36 +123,38 @@ class Gametags(commands.Cog):
         """
         await self._search_IGDB_item(ctx, ItemType.game, game_name)
 
-    async def _get_paginator_for_available_itemtags(self, item_type, tags):
+    async def _get_pages_for_available_itemtags(self, item_type, tags):
         itemtags = await self.repository.find_itemtags_by_tags(item_type, tags)
+        pages = None
         if itemtags:
             paginator = commands.Paginator(prefix='```css', suffix='```', linesep='\n')
-            paginator.add_line(f"Available {item_type}tags:", empty=True)
+            paginator.add_line(f"Available {item_type}tags:{paginator.prefix}")
             for itemtag in itemtags:
                 paginator.add_line(f"{itemtag.tag.name} [{itemtag.item.name}]#{itemtag.item.id}")
-            return paginator
-        return None
+            pages = [paginator.pages[0][len(paginator.prefix):]] + paginator.pages[1:]
+        return pages
     
-    async def _get_paginator_for_all_itemtags(self, item_type, tags):
+    async def _get_pages_for_all_itemtags(self, item_type, tags):
         itemtags = await self.repository.find_itemtags_by_tags(item_type, tags, all=True)
+        pages = None
         if itemtags:
             paginator = commands.Paginator(prefix='```css', suffix='```', linesep='\n')
-            paginator.add_line(f"Imported {item_type}s:", empty=True)
+            paginator.add_line(f"Imported {item_type}s:{paginator.prefix}")
             for itemtag in itemtags:
                 itemtag_name = "\t"
                 if itemtag.tag:
                     itemtag_name = f"{itemtag.tag.name} "
                 paginator.add_line(f"{itemtag_name}[{itemtag.item.name}]#{itemtag.item.id}")
-            return paginator
-        return None
+            pages = [paginator.pages[0][len(paginator.prefix):]] + paginator.pages[1:]
+        return pages
 
     async def _list_available_tags(self, ctx):
         available_tags = self._get_available_tags(ctx.guild)
         if available_tags:
             for item_type in ItemType:
-                paginator = await self._get_paginator_for_available_itemtags(item_type, available_tags)
-                if paginator:
-                    for page in paginator.pages:
+                pages = await self._get_pages_for_available_itemtags(item_type, available_tags)
+                if pages:
+                    for page in pages:
                         await ctx.send(page)
                 else:
                     await ctx.send(f"```There are currently no available {item_type}tags.```")
@@ -155,9 +164,9 @@ class Gametags(commands.Cog):
     async def _list_all_tags(self, ctx):
         available_tags = self._get_available_tags(ctx.guild)
         for item_type in ItemType:
-            paginator = await self._get_paginator_for_all_itemtags(item_type, available_tags)
-            if paginator:
-                for page in paginator.pages:
+            pages = await self._get_pages_for_all_itemtags(item_type, available_tags)
+            if pages:
+                for page in pages:
                     await ctx.send(page)
             else:
                 await ctx.send(f"```There are currently no imported {item_type}s.```")
@@ -609,6 +618,7 @@ class IgdbWrapper:
 
     async def find_item_by_id(self, item_type, item_id):
         url = self.__igdb_url + f"{item_type}s/"
+        # TODO validate/sanitize
         data = f"fields id,name; where id = {item_id};"
 
         result = await self.__post_request(url, data)
@@ -621,6 +631,7 @@ class IgdbWrapper:
 
     async def find_items_by_name(self, item_type, item_name):
         url = self.__igdb_url + f"{item_type}s/"
+        # TODO validate/sanitize
         data = f"fields id,name,slug; sort first_release_date desc; limit 20; where name ~ *\"{item_name}\"*;"
 
         result = await self.__post_request(url, data)
