@@ -1,4 +1,4 @@
-from collections import namedtuple
+﻿from collections import namedtuple
 from enum import Enum
 import logging
 import pathlib
@@ -501,7 +501,7 @@ class ItemtagRepository:
             with closing(sqlite3.connect(self.db_path)) as conn:
                 cursor = conn.cursor()
                 cursor.execute(f"INSERT INTO {item.type}s (id, name) VALUES (?, ?)", [item.id, item.name])
-                # conn.commit()
+                conn.commit()  # not sure why this is needed with the expected autocommit behaviour but it is
             return True
         except sqlite3.IntegrityError:
             return False
