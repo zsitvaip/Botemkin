@@ -123,8 +123,8 @@ async def sync(ctx, scope: Literal['global', 'local'] = commands.parameter(defau
         bot.tree.copy_global_to(guild=guild)
     try:
         synced_commands = await bot.tree.sync(guild=guild)
-    except:
-        await ctx.send(content=f"⚠️ Failed to sync: `{scope}`")
+    except Exception as e:
+        await ctx.send(content=f"⚠️ Failed to sync: `{scope}`, reason: `{e}`")
         raise
     log.info(f"Following {scope} commands got synced: " + ', '.join([cmd.name for cmd in synced_commands]))
     await ctx.send(content=f"Following scope successfully synced: `{scope}`")
