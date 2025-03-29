@@ -13,17 +13,9 @@ import requests
 
 import config as config
 from . import config as cog_config
+from utils import superuser_only
 
 log = logging.getLogger(__name__)
-
-def superuser_only():
-    async def predicate(ctx):
-        SUPERUSER_ROLE = discord.utils.find(
-            lambda role: role.name.casefold() == config.SUPERUSER_ROLE.casefold(), ctx.author.roles)
-        if SUPERUSER_ROLE is None:
-            raise commands.CheckFailure(f"This command is only available to {config.SUPERUSER_ROLE} role.")
-        return True
-    return commands.check(predicate)
 
 class ItemType(Enum):
     game = 1
