@@ -31,7 +31,7 @@ INITIAL_EXTENSIONS = (
     'cogs.vxtwitter',
 )
 
-DEV_GUILD_OBJ = discord.Object(config.DEV_GUILD_ID if config.DEV_GUILD_ID else 0)
+DEV_GUILD_OBJ = discord.Object(config.DEV_GUILD_ID) if config.DEV_GUILD_ID else None
 
 class Botemkin(commands.Bot):
     """Burly bot."""
@@ -107,16 +107,16 @@ SCOPE_DESCIPTION="Select scope of sync. Defaults to 'local' if developer guild i
 @superuser_only()
 async def sync(ctx, scope: Literal['global', 'local'] = commands.parameter(default=None, description=SCOPE_DESCIPTION)):
     """Sync application (aka slash) commands. (superuser-only)
-    
+
     Only required if a new slash command is added or an existing one's signature changes.
     """
-    
+
     await ctx.defer()
-    guild = discord.Object(0)
+    guild = None
     if scope == None:
-        scope = 'local' if DEV_GUILD_OBJ != discord.Object(0) else 'global'
+        scope = 'local' if DEV_GUILD_OBJ != None else 'global'
     if scope == 'local':
-        if DEV_GUILD_OBJ == discord.Object(0):
+        if DEV_GUILD_OBJ == None:
             await ctx.send(content="Developer guild not set, no action performed")
             return
         guild = DEV_GUILD_OBJ
