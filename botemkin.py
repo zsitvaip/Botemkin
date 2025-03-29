@@ -1,12 +1,15 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 import logging
 import sys
 import traceback
-from datetime import datetime, timezone
 import asyncio
+from datetime import datetime, timezone
+from typing import Literal
 
 import config
+from utils import superuser_only
 
 INTENTS = discord.Intents.default()
 INTENTS.members = True
@@ -28,6 +31,8 @@ INITIAL_EXTENSIONS = (
     'cogs.vxtwitter',
 )
 
+DEV_GUILD_OBJ = discord.Object(config.DEV_GUILD_ID if config.DEV_GUILD_ID else 0)
+
 class Botemkin(commands.Bot):
     """Burly bot."""
 
@@ -42,7 +47,6 @@ class Botemkin(commands.Bot):
             except Exception as e:
                 log.error(f"Failed to load extension: {str(e)}")
                 traceback.print_exc()
-        await bot.tree.sync()
 
     async def on_ready(self):
         log.info(f"logged in as {self.user} with an id of {self.user.id}")
@@ -96,4 +100,33 @@ class Botemkin(commands.Bot):
             await home_channel.send(welcome_msg)
 
 bot = Botemkin()
+
+SCOPE_DESCIPTION="Select scope of sync. Defaults to 'local' if developer guild is set, otherwise defaults to 'global'."
+@bot.hybrid_command()
+@app_commands.describe(scope=SCOPE_DESCIPTION)
+@superuser_only()
+async def sync(ctx, scope: Literal['global', 'local'] = commands.parameter(default=None, description=SCOPE_DESCIPTION)):
+    """Sync application (aka slash) commands. (superuser-only)
+    
+    Only required if a new slash command is added or an existing one's signature changes.
+    """
+    
+    await ctx.defer()
+    guild = discord.Object(0)
+    if scope == None:
+        scope = 'local' if DEV_GUILD_OBJ != discord.Object(0) else 'global'
+    if scope == 'local':
+        if DEV_GUILD_OBJ == discord.Object(0):
+            await ctx.send(content="Developer guild not set, no action performed")
+            return
+        guild = DEV_GUILD_OBJ
+        bot.tree.copy_global_to(guild=guild)
+    try:
+        synced_commands = await bot.tree.sync(guild=guild)
+    except:
+        await ctx.send(content=f"⚠️ Failed to sync: `{scope}`")
+        raise
+    log.info(f"Following {scope} commands got synced: " + ', '.join([cmd.name for cmd in synced_commands]))
+    await ctx.send(content=f"Following scope successfully synced: `{scope}`")
+
 bot.run(config.TOKEN, reconnect=True)
