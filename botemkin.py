@@ -128,6 +128,14 @@ async def sync_slash(ctx, scope: Literal['global', 'local'] = commands.parameter
         await ctx.send(content=f"⚠️ Failed to sync: `{scope}`, reason: `{e}`")
         raise
     log.info(f"Following {scope} commands got synced: " + ', '.join([cmd.name for cmd in synced_commands]))
-    await ctx.send(content=f"Following scope successfully synced: `{scope}`")
+    await ctx.send(content=f"Synced: `{scope}`")
+
+@superuser_only()
+@bot.command(aliases=['clear_commands'[:i] for i in range(2,len('clear_commands'))])
+async def clear_commands(ctx):
+    """Clear local (aka guild only) commands. (superuser-only)"""
+    bot.tree.clear_commands(guild=DEV_GUILD_OBJ)
+    await bot.tree.sync(guild=DEV_GUILD_OBJ)
+    await ctx.send(f"Cleared local commands")
 
 bot.run(config.TOKEN, reconnect=True)
