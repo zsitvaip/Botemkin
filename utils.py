@@ -11,3 +11,10 @@ def superuser_only():
             raise commands.CheckFailure(f"This command is only available to {config.SUPERUSER_ROLE} role.")
         return True
     return commands.check(predicate)
+
+async def superuser_cog_check(ctx):
+    SUPERUSER_ROLE = discord.utils.find(
+        lambda role: role.name.casefold() == config.SUPERUSER_ROLE.casefold(), ctx.author.roles)
+    if SUPERUSER_ROLE is None:
+        return False
+    return True

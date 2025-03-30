@@ -26,9 +26,10 @@ Mainly for handing out self-assignable roles (aka tags).
 """
 
 INITIAL_EXTENSIONS = (
-    'cogs.gametags',
-    'cogs.fun',
-    'cogs.vxtwitter',
+    'Developer',
+    'Gametags',
+    'Fun',
+    'Vxtwitter',
 )
 
 DEV_GUILD_OBJ = discord.Object(config.DEV_GUILD_ID) if config.DEV_GUILD_ID else None
@@ -39,11 +40,12 @@ class Botemkin(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix=COMMAND_PREFIX, intents=INTENTS, description=DESCRIPTION)
         self.onboarding_enabled_date = datetime.strptime(config.ONBOARDING_ENABLED_DATE, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        self.initial_extensions = INITIAL_EXTENSIONS
 
     async def setup_hook(self):
-        for extension in INITIAL_EXTENSIONS:
+        for extension in self.initial_extensions:
             try:
-                await self.load_extension(extension)
+                await self.load_extension(f'cogs.{extension.lower()}')
             except Exception as e:
                 log.error(f"Failed to load extension: {str(e)}")
                 traceback.print_exc()

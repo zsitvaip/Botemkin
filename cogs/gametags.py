@@ -46,11 +46,6 @@ class Gametags(commands.Cog):
         self.repository.setup()
         self.igdb_wrapper = IgdbWrapper(cog_config.IGDB_CLIENT_ID, cog_config.IGDB_CLIENT_SECRET)
 
-    async def is_developer(ctx):
-        dev_role = discord.utils.find(
-                lambda role: role.name.casefold() == 'botemkin developer'.casefold(), ctx.author.roles)
-        return dev_role is not None
-
     # TODO make async?
     def _get_available_tags(self, guild : discord.Guild):
         everyone_role = discord.utils.find(
@@ -126,7 +121,7 @@ class Gametags(commands.Cog):
                 paginator.add_line(f"{itemtag.tag.name} [{itemtag.item.name}]#{itemtag.item.id}")
             pages = [paginator.pages[0][len(paginator.prefix):]] + paginator.pages[1:]
         return pages
-    
+
     async def _get_pages_for_all_itemtags(self, item_type, tags):
         itemtags = await self.repository.find_itemtags_by_tags(item_type, tags, all=True)
         pages = None
@@ -427,7 +422,7 @@ class ItemtagRepository:
 
     def setup(self):
         pathlib.Path(self.data_dir).mkdir(parents=True, exist_ok=True)
-        
+
         # TODO use closing context manager instead of try/except once sqlite3 autocommit parameter becomes available for connect (python>=3.12)
             # - all DB connections should turn off autocommit and manually commit changes for clarity
             # - conn.commit() will need to be called for all DB changes
