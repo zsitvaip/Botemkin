@@ -101,11 +101,12 @@ class Botemkin(commands.Bot):
 
 bot = Botemkin()
 
-SCOPE_DESCIPTION="Select scope of sync. Defaults to 'local' if developer guild is set, otherwise defaults to 'global'."
-@bot.hybrid_command()
-@app_commands.describe(scope=SCOPE_DESCIPTION)
 @superuser_only()
-async def sync(ctx, scope: Literal['global', 'local'] = commands.parameter(default=None, description=SCOPE_DESCIPTION)):
+@bot.command(aliases=['sync_slash'[:i] for i in range(2,len('sync_slash'))])
+async def sync_slash(ctx, scope: Literal['global', 'local'] = commands.parameter(
+    default=None,
+    description="Select scope of sync. Defaults to 'local' if dev guild is set, otherwise 'global'.",
+)):
     """Sync application (aka slash) commands. (superuser-only)
 
     Only required if a new slash command is added or an existing one's signature changes.
