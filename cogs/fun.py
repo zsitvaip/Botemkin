@@ -8,7 +8,7 @@ from deep_translator.constants import GOOGLE_LANGUAGES_TO_CODES
 from deep_translator import single_detection, GoogleTranslator
 import requests
 
-from . import config as cog_config
+from . import cog_config
 
 log = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class Fun(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        
+
         # https://github.com/Rapptz/discord.py/issues/7823
         self.translate_name_ctx_menu = app_commands.ContextMenu(
             name='Translate Name',
@@ -97,7 +97,7 @@ class Fun(commands.Cog):
 
     async def translate_message(self, interaction: discord.Interaction, message: discord.Message) -> None:
         await self.create_embed_with_translation(interaction, message.content)
-    
+
     async def create_embed_with_translation(self, interaction: discord.Interaction, text: str) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
 

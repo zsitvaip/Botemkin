@@ -11,8 +11,7 @@ from discord.ext import commands
 # for IGDB wrapper
 import requests
 
-import config as config
-from . import config as cog_config
+from . import cog_config
 from utils import superuser_only
 
 log = logging.getLogger(__name__)
@@ -579,11 +578,11 @@ class ItemtagRepository:
 
 class IgdbWrapper:
 
-    def __init__(self, IGDB_CLIENT_ID, IGDB_CLIENT_SECRET):
+    def __init__(self, igdb_client_id, igdb_client_secret):
         self.__igdb_url = "https://api.igdb.com/v4/"
         self.__twitch_url = "https://id.twitch.tv/oauth2/token"
-        self.__IGDB_CLIENT_ID = IGDB_CLIENT_ID
-        self.__IGDB_CLIENT_SECRET = IGDB_CLIENT_SECRET
+        self.__IGDB_CLIENT_ID = igdb_client_id
+        self.__IGDB_CLIENT_SECRET = igdb_client_secret
         self.__access_token = None
 
     async def __renew_access_token(self):

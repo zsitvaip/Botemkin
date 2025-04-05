@@ -4,4 +4,5 @@ data/
 *.pyc
 *.log
 config.py
+cogs/cog_config.py
 launch.json
