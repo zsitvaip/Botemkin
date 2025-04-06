@@ -25,13 +25,6 @@ Pot but bot.
 Mainly for handing out self-assignable roles (aka tags).
 """
 
-INITIAL_EXTENSIONS = (
-    'Developer',
-    'Gametags',
-    'Fun',
-    'Vxtwitter',
-)
-
 DEV_GUILD_OBJ = discord.Object(config.DEV_GUILD_ID) if config.DEV_GUILD_ID else None
 
 class Botemkin(commands.Bot):
@@ -40,10 +33,9 @@ class Botemkin(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix=COMMAND_PREFIX, intents=INTENTS, description=DESCRIPTION)
         self.onboarding_enabled_date = datetime.strptime(config.ONBOARDING_ENABLED_DATE, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-        self.initial_extensions = INITIAL_EXTENSIONS
 
     async def setup_hook(self):
-        for extension in self.initial_extensions:
+        for extension in config.EXTENSIONS:
             try:
                 await self.load_extension(f'cogs.{extension.lower()}')
             except Exception as e:

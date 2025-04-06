@@ -2,6 +2,7 @@ from discord.ext import commands
 import logging
 import traceback
 
+from config import EXTENSIONS
 from utils import superuser_cog_check
 
 log = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ class Developer(commands.Cog):
         if func not in (self.bot.reload_extension, self.bot.load_extension, self.bot.unload_extension):
             await ctx.send(f"Unknown operation.", ephemeral=True)
             return
-        for x in self.bot.initial_extensions:
+        for x in EXTENSIONS:
             if x.lower().startswith(extension.lower()):
                 try:
                     await func(f'cogs.{x.lower()}')
@@ -39,7 +40,7 @@ class Developer(commands.Cog):
     @extension.command(aliases=['ls']+['list'[:i] for i in range(2,len('list'))])
     async def list(self, ctx):
         """List available extensions."""
-        await ctx.send(f"Available extensions: {', '.join([f'`{x}`' for x in self.bot.initial_extensions])}")
+        await ctx.send(f"Available extensions: {', '.join([f'`{x}`' for x in EXTENSIONS])}")
 
     @extension.command(aliases=['reload'[:i] for i in range(1,len('reload'))])
     async def reload(self, ctx, extension):
