@@ -114,7 +114,6 @@ async def sync_slash(ctx, scope: Literal['global', 'local'] = commands.parameter
     Only required if a new slash command is added or an existing one's signature changes.
     """
 
-    await ctx.defer()
     guild = None
     if scope == None:
         scope = 'local' if DEV_GUILD_OBJ != None else 'global'
@@ -133,11 +132,30 @@ async def sync_slash(ctx, scope: Literal['global', 'local'] = commands.parameter
     await ctx.send(content=f"Synced: `{scope}`")
 
 @superuser_only()
-@bot.command(aliases=['clear_commands'[:i] for i in range(2,len('clear_commands'))])
-async def clear_commands(ctx):
-    """Clear local (aka guild only) commands. (superuser-only)"""
-    bot.tree.clear_commands(guild=DEV_GUILD_OBJ)
-    await bot.tree.sync(guild=DEV_GUILD_OBJ)
-    await ctx.send(f"Cleared local commands")
+@bot.command(aliases=['clear_slash'[:i] for i in range(2,len('clear_slash'))])
+async def clear_slash(ctx, scope: Literal['global', 'local'] = commands.parameter(
+    default=None,
+    description="Select scope of clear. Defaults to 'local' if dev guild is set, otherwise 'global'.",
+)):
+    """Clear application (aka slash) commands. (superuser-only)
+
+    Only required if a slash command has been removed but still shows up on the client.
+    """
+
+    guild = None
+    if scope == None:
+        scope = 'local' if DEV_GUILD_OBJ != None else 'global'
+    if scope == 'local':
+        if DEV_GUILD_OBJ == None:
+            await ctx.send(content="Developer guild not set, no action performed")
+            return
+        guild = DEV_GUILD_OBJ
+    try:
+        bot.tree.clear_commands(guild=guild)
+        await bot.tree.sync(guild=guild)
+    except Exception as e:
+        await ctx.send(content=f"⚠️ Failed to clear: `{scope}`, reason: `{e}`")
+        raise
+    await ctx.send(f"Cleared `{scope}` commands")
 
 bot.run(config.TOKEN, reconnect=True)
