@@ -18,7 +18,7 @@ class Vxtwitter(commands.Cog):
             return
         # NOTE this pattern is a bit more forgiving than Discord's
         pattern = re.compile(r'https://(mobile.|vx)?(twitter|x).com/([\w]{4,15}/status/[0-9]+)')
-        matches = pattern.finditer(message)
+        matches = pattern.finditer(message.content)
         prefixes = set()
         links = dict()  # wanted to use ordered set but apparently this is the closest thing
         for m in matches:
