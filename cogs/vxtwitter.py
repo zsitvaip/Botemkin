@@ -18,7 +18,7 @@ class Vxtwitter(commands.Cog):
             return
         # NOTE this pattern is a bit more forgiving than Discord's
         pattern = re.compile(r'https://(mobile.|vx)?(twitter|x).com/([\w]{4,15}/status/[0-9]+)')
-        matches = pattern.finditer(message)
+        matches = pattern.finditer(message.content)
         prefixes = set()
         links = dict()  # wanted to use ordered set but apparently this is the closest thing
         for m in matches:
@@ -34,8 +34,6 @@ class Vxtwitter(commands.Cog):
         if not links or prefixes == {"vx"} or prefixes == {"dd"} or prefixes == {"dd", "vx"}:
             # if there are no matches (or it's all vxtwitter links) then our work here is done
             return
-        
-        
         text = ' '.join(links.keys())
         reply = await message.reply(text, mention_author=False)
         await reply.add_reaction(UNDO_EMOJI_NAME)
