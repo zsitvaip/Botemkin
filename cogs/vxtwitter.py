@@ -16,19 +16,10 @@ class Vxtwitter(commands.Cog):
     async def on_message(self, message):
         if message.author.bot or message.type is not discord.MessageType.default:
             return
-        # NOTE this pattern is a bit more forgiving than Discord's
-        pattern = re.compile(r'https://(mobile.|vx)?(twitter|x).com/([\w]{4,15}/status/[0-9]+)')
-        matches = pattern.finditer(message.content)
-        prefixes = set()
-        links = dict()  # wanted to use ordered set but apparently this is the closest thing
-        for m in matches:
-            prefixes.add(m.group(1))
-            links[f"https://vxtwitter.com/{m.group(3)}"] = None
-        if not links or prefixes == {"vx"}:
-            # if there are no matches (or it's all vxtwitter links) then our work here is done
+        links = self.generate_vxtwitter_links(message.content)
+        if not links:
             return
-        text = ' '.join(links.keys())
-        reply = await message.reply(text, mention_author=False)
+        reply = await message.reply(links, mention_author=False)
         await reply.add_reaction(UNDO_EMOJI_NAME)
         await message.edit(suppress=True)
 
@@ -55,6 +46,20 @@ class Vxtwitter(commands.Cog):
                 return
         # if the original messages was deleted anyone can revert
         await msg.delete()
+
+    def generate_vxtwitter_links(self, text):
+        # NOTE this pattern is a bit more forgiving than Discord's
+        pattern = re.compile(r'https://(mobile.|vx)?(twitter|x).com/([\w]{4,15}/status/[0-9]+)')
+        matches = pattern.finditer(text)
+        prefixes = set()
+        links = dict()  # wanted to use ordered set but apparently this is the closest thing
+        for m in matches:
+            prefixes.add(m.group(1))
+            links[f"https://vxtwitter.com/{m.group(3)}"] = None
+        if not links or prefixes == {"vx"}:
+            # if there are no matches (or it's all vxtwitter links) then our work here is done
+            return
+        return ' '.join(links.keys())
 
 async def setup(bot):
     await bot.add_cog(Vxtwitter(bot))
