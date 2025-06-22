@@ -25,7 +25,7 @@ Pot but bot.
 Mainly for handing out self-assignable roles (aka tags).
 """
 
-DEV_GUILD_OBJ = discord.Object(config.DEV_GUILD_ID) if hasattr(config, 'DEV_GUILD_ID') else None
+DEV_GUILD_OBJ = discord.Object(config.DEV_GUILD_ID) if hasattr(config, 'DEV_GUILD_ID') else None  # type: ignore
 
 class Botemkin(commands.Bot):
     """Burly bot."""
@@ -43,7 +43,7 @@ class Botemkin(commands.Bot):
                 traceback.print_exc()
 
     async def on_ready(self):
-        log.info(f"logged in as {self.user} with an id of {self.user.id}")
+        log.info(f"logged in as {self.user} with an id of {self.user.id}")  # type: ignore
 
     # TODO print something helpful
     async def on_command_error(self, ctx, error):
@@ -59,11 +59,11 @@ class Botemkin(commands.Bot):
     async def on_member_update(self, before, after):
         if before.flags.completed_onboarding == True or after.flags.completed_onboarding == False:
             return
-        elif (before.joined_at < self.onboarding_enabled_date):
+        channels = after.guild.channels
+        if (before.joined_at < self.onboarding_enabled_date):
             mod_channel = discord.utils.get(channels, name=config.MOD_CHANNEL)
             await mod_channel.send(f"Onboarded member who joined before its introduction, name: {after.mention}")
             return
-        channels = after.guild.channels
         home_channel = discord.utils.get(channels, name=config.HOME_CHANNEL)
         restricted_role = discord.utils.find(
             lambda role: role.name.casefold() == config.RESTRICTED_ROLE.casefold(), after.roles)
@@ -90,7 +90,7 @@ class Botemkin(commands.Bot):
                 home=home_channel.mention,
                 general=general_channel.mention,
                 matchmaking=matchmaking_channel.mention,
-                botemkin=self.user.mention)
+                botemkin=self.user.mention)  # type: ignore
             await home_channel.send(welcome_msg)
 
 bot = Botemkin()

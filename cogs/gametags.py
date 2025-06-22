@@ -52,7 +52,7 @@ class Gametags(commands.Cog):
 
         # TODO this doesn't seem to actually filter out roles by permission
         available_tags = list(filter(
-            lambda role: role.id != everyone_role.id and role.permissions <= everyone_role.permissions, guild.roles))
+            lambda role: role.id != everyone_role.id and role.permissions <= everyone_role.permissions, guild.roles))  # type: ignore
 
         return available_tags
 
@@ -87,7 +87,7 @@ class Gametags(commands.Cog):
                 for row in table_rows:
                     paginator.add_line(row)
 
-                pages = [paginator.pages[0][len(paginator.prefix):]] + paginator.pages[1:]
+                pages = [paginator.pages[0][len(paginator.prefix):]] + paginator.pages[1:]  # type: ignore
                 for page in pages:
                     await ctx.send(page)
             else:
@@ -118,7 +118,7 @@ class Gametags(commands.Cog):
             paginator.add_line(f"Available {item_type}tags:{paginator.prefix}")
             for itemtag in itemtags:
                 paginator.add_line(f"{itemtag.tag.name} [{itemtag.item.name}]#{itemtag.item.id}")
-            pages = [paginator.pages[0][len(paginator.prefix):]] + paginator.pages[1:]
+            pages = [paginator.pages[0][len(paginator.prefix):]] + paginator.pages[1:]  # type: ignore
         return pages
 
     async def _get_pages_for_all_itemtags(self, item_type, tags):
@@ -132,7 +132,7 @@ class Gametags(commands.Cog):
                 if itemtag.tag:
                     itemtag_name = f"{itemtag.tag.name} "
                 paginator.add_line(f"{itemtag_name}[{itemtag.item.name}]#{itemtag.item.id}")
-            pages = [paginator.pages[0][len(paginator.prefix):]] + paginator.pages[1:]
+            pages = [paginator.pages[0][len(paginator.prefix):]] + paginator.pages[1:]  # type: ignore
         return pages
 
     async def _list_available_tags(self, ctx):
@@ -294,7 +294,7 @@ class Gametags(commands.Cog):
         if len(role_names) > 1:
             await self._intersect_players(ctx, role_names)
         else:
-            await self._show_players_for_single_role(ctx, role_names[0])
+            await self._show_players_for_single_role(ctx, role_names[0])  # type: ignore
 
     async def _show_players_for_single_role(self, ctx, role_name):
         role = discord.utils.find(
@@ -616,8 +616,8 @@ class IgdbWrapper:
         data = f"fields id,name; where id = {item_id};"
 
         result = await self.__post_request(url, data)
-        result.body = result.json()
-        elem = result.body[0] if result.body else None
+        result.body = result.json()  # type: ignore
+        elem = result.body[0] if result.body else None  # type: ignore
         item = None
         if elem:
             item = Item(item_type, elem['id'], elem['name'])
