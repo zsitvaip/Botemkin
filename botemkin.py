@@ -25,7 +25,7 @@ Pot but bot.
 Mainly for handing out self-assignable roles (aka tags).
 """
 
-DEV_GUILD_OBJ = discord.Object(config.DEV_GUILD_ID) if config.DEV_GUILD_ID else None
+DEV_GUILD_OBJ = discord.Object(config.DEV_GUILD_ID) if hasattr(config, 'DEV_GUILD_ID') else None
 
 class Botemkin(commands.Bot):
     """Burly bot."""
