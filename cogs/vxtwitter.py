@@ -14,7 +14,7 @@ class Vxtwitter(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.bot or message.type is not discord.MessageType.default:
+        if message.author.bot or message.type not in (discord.MessageType.default, discord.MessageType.reply):
             return
         links = self.generate_vxtwitter_links(message.content)
         if not links:
