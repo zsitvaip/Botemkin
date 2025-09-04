@@ -218,8 +218,8 @@ class Gametags(commands.Cog):
 
         Usage examples:
 
-        !play T7
-        !p GG Melty UNIST
+        !play T8
+        !p Strive Melty BBCF
         """
 
         # required because *tag_names being empty does not trigger a MissingRequiredArgument
@@ -267,7 +267,7 @@ class Gametags(commands.Cog):
 
         Usage examples:
 
-        !drop IJ2
+        !drop DNFD
         !d DBFZ BBTag
         """
 
@@ -283,9 +283,8 @@ class Gametags(commands.Cog):
 
         Usage examples:
 
-        !players SFV
-        !ps PS4
-        !ps GG BBCF PC
+        !players SF6
+        !ps Strive GBVSR
         """
 
         # required because *tag_names being empty does not trigger a MissingRequiredArgument
