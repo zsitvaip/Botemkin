@@ -49,7 +49,7 @@ class Vxtwitter(commands.Cog):
 
     def generate_vxtwitter_links(self, text):
         # NOTE this pattern is a bit more forgiving than Discord's
-        pattern = re.compile(r'https://(mobile.|vx)?(twitter|x).com/([\w]{4,15}/status/[0-9]+)')
+        pattern = re.compile(r'https://(mobile.|vx)?(twitter|x).com/([\w]+/status/[0-9]+)')
         matches = pattern.finditer(text)
         prefixes = set()
         links = dict()  # wanted to use ordered set but apparently this is the closest thing
